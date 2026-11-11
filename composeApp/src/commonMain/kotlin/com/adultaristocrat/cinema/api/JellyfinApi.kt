@@ -107,6 +107,40 @@ class JellyfinApi(
         return result
     }
 
+    // ---------------- Быстрое подключение (Quick Connect) ----------------
+
+    suspend fun quickConnectEnabled(server: String): Boolean {
+        val url = normalizeServer(server)
+        return runCatching { http.get("$url/QuickConnect/Enabled") { auth(emptyMap()) }.body<Boolean>() }.getOrDefault(false)
+    }
+
+    /** Получить код для ввода на другом устройстве */
+    suspend fun quickConnectInitiate(server: String): QuickConnectResult {
+        baseUrl = normalizeServer(server)
+        token = null
+        return runCatching { http.post("$baseUrl/QuickConnect/Initiate") { auth(emptyMap()) }.body<QuickConnectResult>() }
+            .getOrElse { http.get("$baseUrl/QuickConnect/Initiate") { auth(emptyMap()) }.body() }
+    }
+
+    suspend fun quickConnectState(secret: String): QuickConnectResult =
+        http.get("$baseUrl/QuickConnect/Connect") { auth(mapOf("secret" to secret)) }.body()
+
+    suspend fun quickConnectAuthenticate(secret: String): AuthResult {
+        val result: AuthResult = http.post("$baseUrl/Users/AuthenticateWithQuickConnect") {
+            auth(emptyMap())
+            contentType(ContentType.Application.Json)
+            setBody(mapOf("Secret" to secret))
+        }.body()
+        token = result.accessToken
+        userId = result.user?.id
+        return result
+    }
+
+    /** Подтвердить вход другого устройства по коду (из настроек этого приложения) */
+    suspend fun quickConnectAuthorize(code: String) {
+        http.post("$baseUrl/QuickConnect/Authorize") { auth(mapOf("code" to code.trim(), "userId" to userId)) }
+    }
+
     suspend fun logout() {
         runCatching { postEmpty("/Sessions/Logout") }
         token = null
@@ -239,7 +273,7 @@ class JellyfinApi(
      */
     fun remuxUrl(itemId: String, mediaSourceId: String?, playSessionId: String?): String =
         "$baseUrl/Videos/$itemId/master.m3u8?VideoCodec=h264,hevc,vp9,av1&AudioCodec=aac,mp3,opus,flac" +
-            "&AllowVideoStreamCopy=true&AllowAudioStreamCopy=true&SegmentContainer=mp4" +
+            "&AllowVideoStreamCopy=true&AllowAudioStreamCopy=true&SegmentContainer=mp4&SegmentLength=3&MinSegments=1" +
             "&TranscodingMaxAudioChannels=6&MaxAudioChannels=6&MaxStreamingBitrate=200000000" +
             q("MediaSourceId", mediaSourceId) + q("PlaySessionId", playSessionId) +
             q("DeviceId", deviceId) + q("api_key", token)

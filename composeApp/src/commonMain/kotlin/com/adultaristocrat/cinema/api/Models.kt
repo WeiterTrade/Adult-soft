@@ -16,6 +16,13 @@ data class AuthResult(
 )
 
 @Serializable
+data class QuickConnectResult(
+    @SerialName("Secret") val secret: String? = null,
+    @SerialName("Code") val code: String? = null,
+    @SerialName("Authenticated") val authenticated: Boolean = false,
+)
+
+@Serializable
 data class UserDto(
     @SerialName("Id") val id: String,
     @SerialName("Name") val name: String? = null,

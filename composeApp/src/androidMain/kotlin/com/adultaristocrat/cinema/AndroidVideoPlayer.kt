@@ -18,6 +18,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
@@ -108,7 +109,12 @@ fun AndroidVideoSurface(
         val renderers = DefaultRenderersFactory(context)
             .setEnableDecoderFallback(true)
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
+        // Короткий стартовый буфер — видео начинается быстрее
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(15_000, 50_000, 1_000, 2_000)
+            .build()
         ExoPlayer.Builder(context, renderers)
+            .setLoadControl(loadControl)
             .build()
             .apply {
                 setMediaItem(MediaItem.fromUri(request.url), request.startPositionMs)

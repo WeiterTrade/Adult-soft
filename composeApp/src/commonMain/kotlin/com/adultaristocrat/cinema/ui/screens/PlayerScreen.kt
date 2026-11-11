@@ -57,7 +57,13 @@ class PlayerModel(private val state: AppState, private val route: Route.Player) 
                 val startMs = route.startMs
                     ?: if (route.fromStart) 0L else (it.userData?.playbackPositionTicks ?: 0L) / JellyfinApi.TICKS_PER_MS
                 lastPosMs = startMs
-                mode = if (state.forceTranscode) Mode.TRANSCODE else Mode.DIRECT
+                // Android сразу идёт через HLS-переупаковку: сцены и перемотка работают всегда, без пробного запуска.
+                // ПК (VLC) перематывает MKV сам — играет файл напрямую.
+                mode = when {
+                    state.forceTranscode -> Mode.TRANSCODE
+                    state.platform.isDesktop || state.directPlay -> Mode.DIRECT
+                    else -> Mode.REMUX
+                }
                 request = PlaybackRequest(
                     url = buildUrl(),
                     startPositionMs = startMs,

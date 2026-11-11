@@ -29,6 +29,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.adultaristocrat.cinema.AppConfig
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import kotlinx.coroutines.launch
 import com.adultaristocrat.cinema.AppState
 import com.adultaristocrat.cinema.ui.AA
 import com.adultaristocrat.cinema.ui.AAButton
@@ -58,13 +69,23 @@ fun SettingsScreen(state: AppState) {
         InfoRow("Пользователь", state.userName)
         InfoRow("Устройство", state.platform.deviceName)
 
+        SectionTitle("Быстрое подключение")
+        QuickConnectAuthorize(state)
+
         SectionTitle("Воспроизведение")
         ToggleRow(
             "Всегда перекодировать видео",
             "Включите, если видео не запускается или нет звука (DTS, TrueHD). Нагружает сервер.",
             state.forceTranscode,
         ) { state.updateForceTranscode(it) }
-        ToggleRow(
+        if (!state.platform.isDesktop) {
+            ToggleRow(
+                "Прямое воспроизведение файла",
+                "Видео стартует чуть быстрее, но в некоторых MKV перемотка и сцены могут начинать фильм сначала.",
+                state.directPlay,
+            ) { state.updateDirectPlay(it) }
+        }
+        if (com.adultaristocrat.cinema.AppConfig.SHOW_SERIES) ToggleRow(
             "Автоматически следующая серия",
             "После окончания серии сразу включать следующую",
             state.autoNextEpisode,
@@ -110,5 +131,51 @@ private fun ToggleRow(title: String, subtitle: String, checked: Boolean, onChang
                 uncheckedThumbColor = AA.TextDim, uncheckedTrackColor = AA.SurfaceHigher,
             ),
         )
+    }
+}
+
+/** Ввод кода с другого устройства (ТВ, телефон, ПК), чтобы оно вошло в этот аккаунт без пароля */
+@Composable
+private fun QuickConnectAuthorize(state: AppState) {
+    val scope = rememberCoroutineScope()
+    var code by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Color(0xE0101010))
+            .border(1.dp, AA.BorderDark, RoundedCornerShape(10.dp)).padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(
+            "На другом устройстве нажмите «Быстрое подключение» на экране входа и введите показанный там код сюда.",
+            color = AA.TextDim, style = MaterialTheme.typography.bodySmall,
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = code,
+                onValueChange = { v -> code = v.filter { it.isDigit() }.take(8) },
+                singleLine = true,
+                label = { Text("Код") },
+                colors = aaFieldColors(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.width(12.dp))
+            AAButton(if (busy) "…" else "Подтвердить", Icons.Rounded.Check, {
+                if (!busy && code.length >= 4) {
+                    busy = true
+                    scope.launch {
+                        try {
+                            state.api.quickConnectAuthorize(code)
+                            state.showToast("Готово! Устройство входит в аккаунт")
+                            code = ""
+                        } catch (e: Exception) {
+                            state.showToast("Код не подошёл или устарел")
+                        } finally {
+                            busy = false
+                        }
+                    }
+                }
+            })
+        }
     }
 }

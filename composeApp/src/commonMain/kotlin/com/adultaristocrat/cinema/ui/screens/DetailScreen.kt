@@ -422,33 +422,50 @@ private fun InfoBody(state: AppState, model: DetailModel, item: BaseItem, playFo
         }
     }
 
-    // Актёры
-    val cast = item.people.filter { it.type == "Actor" || it.type == "Director" }.take(25)
-    if (cast.isNotEmpty()) {
-        Spacer(Modifier.height(18.dp))
-        Text("В ролях", style = MaterialTheme.typography.titleLarge, color = AA.Text)
-        Spacer(Modifier.height(8.dp))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(4.dp)) {
-            items(cast) { p ->
-                val fv = rememberFocusVisual()
-                Column(
-                    Modifier.width(96.dp).clickable(interactionSource = fv.interaction, indication = null) { },
-                    horizontalAlignment = Alignment.CenterHorizontally,
+    // Актёры и режиссёры — прямоугольные портреты 2:3 (как 1000×1500 у Kodi)
+    val actors = item.people.filter { it.type == "Actor" || it.type == "GuestStar" }.take(30)
+    val directors = item.people.filter { it.type == "Director" }.take(10)
+    PeopleRow("В ролях", actors, api, ui.isPhone)
+    PeopleRow("Режиссёры", directors, api, ui.isPhone)
+}
+
+@Composable
+private fun PeopleRow(title: String, people: List<com.adultaristocrat.cinema.api.PersonDto>, api: JellyfinApi, compact: Boolean) {
+    if (people.isEmpty()) return
+    Spacer(Modifier.height(18.dp))
+    Text(title, style = MaterialTheme.typography.titleLarge, color = AA.Text)
+    Spacer(Modifier.height(8.dp))
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(4.dp)) {
+        items(people) { p ->
+            val fv = rememberFocusVisual()
+            val shape = RoundedCornerShape(12.dp)
+            val w = if (compact) 92.dp else 120.dp
+            Column(
+                Modifier.width(w).clickable(interactionSource = fv.interaction, indication = null) { },
+            ) {
+                Box(
+                    Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(shape).background(Color(0xFF3A3A3A))
+                        .border(if (fv.active) 3.dp else 1.dp, if (fv.active) AA.Red else AA.BorderDark, shape),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Box(
-                        Modifier.size(86.dp).clip(CircleShape).background(AA.SurfaceHigh)
-                            .border(if (fv.active) 3.dp else 1.dp, if (fv.active) AA.Red else AA.Border, CircleShape)
-                    ) {
+                    val initials = (p.name ?: "").split(" ").filter { it.isNotBlank() }.take(2)
+                        .joinToString("") { it.take(1).uppercase() }
+                    Text(initials, color = Color(0xFFE0E0E0), fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                    val url = api.personUrl(p, 600)
+                    if (url != null) {
                         AsyncImage(
-                            model = api.personUrl(p), contentDescription = p.name,
+                            model = url, contentDescription = p.name,
                             contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(),
                         )
                     }
-                    Text(p.name ?: "", color = AA.Text, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    val role = if (p.type == "Director") "Режиссёр" else p.role
-                    if (!role.isNullOrBlank()) {
-                        Text(role, color = AA.TextDim, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
+                }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    p.name ?: "", color = if (fv.active) AA.RedHover else AA.Text, fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                )
+                if (p.type != "Director" && !p.role.isNullOrBlank()) {
+                    Text(p.role, color = AA.TextDim, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }

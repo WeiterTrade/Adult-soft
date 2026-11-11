@@ -31,6 +31,7 @@ import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.ViewList
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.key
@@ -99,6 +100,23 @@ fun App(state: AppState) {
 
 @Composable
 private fun Shell(state: AppState) {
+    Box(Modifier.fillMaxSize()) {
+        ShellContent(state)
+        state.toast?.let { msg ->
+            Text(
+                msg,
+                color = AA.Text,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 90.dp)
+                    .clip(RoundedCornerShape(14.dp)).background(Color(0xF0140000))
+                    .border(1.dp, AA.Red, RoundedCornerShape(14.dp))
+                    .padding(horizontal = 18.dp, vertical = 12.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ShellContent(state: AppState) {
     val ui = LocalUi.current
     val route = state.current
     if (route is Route.Player) {

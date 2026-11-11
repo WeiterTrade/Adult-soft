@@ -66,7 +66,15 @@ class AppState(val platform: Platform) {
     }
 
     suspend fun login(server: String, user: String, password: String) {
-        val res = api.login(server, user, password)
+        saveSession(api.login(server, user, password), user)
+    }
+
+    /** Вход после подтверждения кода быстрого подключения на другом устройстве */
+    suspend fun loginWithQuickConnect(secret: String) {
+        saveSession(api.quickConnectAuthenticate(secret), "")
+    }
+
+    private fun saveSession(res: com.adultaristocrat.cinema.api.AuthResult, user: String) {
         val token = res.accessToken ?: error("Не удалось войти, попробуйте ещё раз")
         val u = res.user ?: error("Не удалось войти, попробуйте ещё раз")
         store.put(K_SERVER, api.baseUrl)
@@ -97,6 +105,15 @@ class AppState(val platform: Platform) {
         store.put(K_FORCE_TRANSCODE, if (v) "1" else "0")
     }
 
+    /** Android: играть файл напрямую (быстрее старт, но перемотка в MKV без индекса может не работать) */
+    var directPlay by mutableStateOf(store.get(K_DIRECT_PLAY) == "1")
+        private set
+
+    fun updateDirectPlay(v: Boolean) {
+        directPlay = v
+        store.put(K_DIRECT_PLAY, if (v) "1" else "0")
+    }
+
     fun updateAutoNext(v: Boolean) {
         autoNextEpisode = v
         store.put(K_AUTO_NEXT, if (v) "1" else "0")
@@ -111,7 +128,42 @@ class AppState(val platform: Platform) {
     val currentTab: AppTab
         get() = (stack.lastOrNull { it is Route.Tab } as? Route.Tab)?.tab ?: AppTab.HOME
 
+    /** Короткое сообщение внизу экрана */
+    var toast by mutableStateOf<String?>(null)
+        private set
+    private var toastJob: kotlinx.coroutines.Job? = null
+
+    fun showToast(text: String) {
+        toast = text
+        toastJob?.cancel()
+        toastJob = scope.launch {
+            kotlinx.coroutines.delay(3500)
+            toast = null
+        }
+    }
+
+    private var continueBusy = false
+
+    /** Кнопка ▶: сразу запускает последний недосмотренный фильм */
+    fun continueLast() {
+        if (continueBusy) return
+        continueBusy = true
+        scope.launch {
+            try {
+                val last = runCatching { api.resume(limit = 1).items.firstOrNull() }.getOrNull()
+                if (last != null) navigate(Route.Player(last.id))
+                else showToast("Нет недосмотренных фильмов")
+            } finally {
+                continueBusy = false
+            }
+        }
+    }
+
     fun openTab(tab: AppTab) {
+        if (tab == AppTab.CONTINUE) {
+            continueLast()
+            return
+        }
         // Повторное нажатие на «Случайное» — новая подборка
         if (tab == AppTab.RANDOM && currentTab == AppTab.RANDOM && stack.size == 1) {
             models.remove(tabRoute(tab))
@@ -166,5 +218,6 @@ class AppState(val platform: Platform) {
         private const val K_USER_NAME = "userName"
         private const val K_FORCE_TRANSCODE = "forceTranscode"
         private const val K_AUTO_NEXT = "autoNext"
+        private const val K_DIRECT_PLAY = "directPlay"
     }
 }

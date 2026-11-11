@@ -46,6 +46,15 @@ import com.adultaristocrat.cinema.ui.AAButton
 import com.adultaristocrat.cinema.ui.Logo
 import com.adultaristocrat.cinema.ui.brandStyle
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.CancellationException
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.QrCode2
 
 @Composable
 fun aaFieldColors(): TextFieldColors = OutlinedTextFieldDefaults.colors(
@@ -68,6 +77,47 @@ fun LoginScreen(state: AppState) {
     var password by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var qcCode by remember { mutableStateOf<String?>(null) }   // код быстрого подключения
+    var qcJob by remember { mutableStateOf<Job?>(null) }
+
+    fun cancelQuickConnect() {
+        qcJob?.cancel()
+        qcJob = null
+        qcCode = null
+    }
+
+    fun startQuickConnect() {
+        if (qcJob != null) return
+        error = null
+        qcJob = scope.launch {
+            try {
+                if (!state.api.quickConnectEnabled(server)) {
+                    error = "Быстрое подключение выключено на сервере (Панель управления → Общие → «Быстрое подключение»)"
+                    return@launch
+                }
+                val init = state.api.quickConnectInitiate(server)
+                val secret = init.secret ?: throw IllegalStateException("Сервер не выдал код")
+                qcCode = init.code
+                // Ждём подтверждения до 10 минут, проверяем каждые 3 секунды
+                repeat(200) {
+                    delay(3000)
+                    val st = runCatching { state.api.quickConnectState(secret) }.getOrNull()
+                    if (st?.authenticated == true) {
+                        state.loginWithQuickConnect(secret)
+                        return@launch
+                    }
+                }
+                error = "Время ожидания истекло. Попробуйте ещё раз."
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                error = "Быстрое подключение не удалось: ${e.message ?: e}"
+            } finally {
+                qcCode = null
+                qcJob = null
+            }
+        }
+    }
 
     fun doLogin() {
         if (busy) return
@@ -142,10 +192,34 @@ fun LoginScreen(state: AppState) {
                 modifier = Modifier.fillMaxWidth(),
             )
             error?.let { Text(it, color = Color(0xFFFF6B6B), textAlign = TextAlign.Center) }
-            if (busy) {
-                CircularProgressIndicator(color = AA.Red)
-            } else {
-                AAButton("Войти", Icons.Rounded.Login, { doLogin() }, Modifier.fillMaxWidth())
+            val code = qcCode
+            when {
+                busy -> CircularProgressIndicator(color = AA.Red)
+                code != null -> {
+                    Text("Быстрое подключение", style = MaterialTheme.typography.titleLarge, color = AA.Text)
+                    Text(
+                        code.chunked(3).joinToString(" "),
+                        style = brandStyle(44), textAlign = TextAlign.Center,
+                    )
+                    Text(
+                        "На другом устройстве, где вы уже вошли, откройте Adult Aristocrat → Настройки → " +
+                            "«Быстрое подключение» и введите этот код.\nИли в браузере: профиль → «Быстрое подключение».",
+                        color = AA.TextDim, textAlign = TextAlign.Center,
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(color = AA.Red, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(10.dp))
+                        Text("Ожидаем подтверждения…", color = AA.TextDim)
+                    }
+                    AAButton("Отмена", Icons.Rounded.Close, { cancelQuickConnect() }, Modifier.fillMaxWidth(), primary = false)
+                }
+                else -> {
+                    AAButton("Войти", Icons.Rounded.Login, { doLogin() }, Modifier.fillMaxWidth())
+                    AAButton(
+                        if (qcJob != null) "Подключение…" else "Быстрое подключение", Icons.Rounded.QrCode2,
+                        { startQuickConnect() }, Modifier.fillMaxWidth(), primary = false,
+                    )
+                }
             }
         }
     }
