@@ -77,13 +77,19 @@ jobs:
         run: bash scripts/fetch-assets.sh
       - name: VLC (встраивается в программу)
         run: bash scripts/fetch-vlc-windows.sh
-      - name: Сборка установщиков и портативной версии
-        run: bash ./gradlew :composeApp:packageMsi :composeApp:packageExe :composeApp:createDistributable --stacktrace
+      - name: Сборка программы
+        run: bash ./gradlew :composeApp:createDistributable --stacktrace
+      - name: Inno Setup 6.2.2 (установщики работают и на Windows 7)
+        shell: pwsh
+        run: choco install innosetup --version=6.2.2 --allow-downgrade --force -y --no-progress
       - name: Упаковка
         run: |
           mkdir -p out
-          cp composeApp/build/compose/binaries/main/msi/*.msi "out/AdultAristocrat-${APP_VERSION#v}-win10-11.msi"
-          cp composeApp/build/compose/binaries/main/exe/*.exe "out/AdultAristocrat-${APP_VERSION#v}-win10-11-setup.exe"
+          V="${APP_VERSION#v}"
+          ISCC="/c/Program Files (x86)/Inno Setup 6/ISCC.exe"
+          # Установщик Windows 10/11 и отдельный — Windows 7 (выбор языка: русский / English)
+          (cd packaging/windows && "$ISCC" -Q "-DMyAppVersion=$V" AdultAristocrat.iss)
+          (cd packaging/windows && "$ISCC" -Q "-DMyAppVersion=$V" -DWin7 AdultAristocrat.iss)
           APPDIR=composeApp/build/compose/binaries/main/app/AdultAristocrat
           cp packaging/win7/*.bat "$APPDIR/"
           cd composeApp/build/compose/binaries/main/app
@@ -95,7 +101,7 @@ jobs:
           path: out/*
 
   linux:
-    name: Linux (deb + tar.gz)
+    name: Linux (deb + rpm + tar.gz)
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -117,12 +123,15 @@ jobs:
           chmod +x gradlew
       - name: Шрифты
         run: bash scripts/fetch-assets.sh
+      - name: Инструменты для RPM
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq rpm
       - name: Сборка
-        run: bash ./gradlew :composeApp:packageDeb :composeApp:createDistributable --stacktrace
+        run: bash ./gradlew :composeApp:packageDeb :composeApp:packageRpm :composeApp:createDistributable --stacktrace
       - name: Упаковка
         run: |
           mkdir -p out
           cp composeApp/build/compose/binaries/main/deb/*.deb out/
+          cp composeApp/build/compose/binaries/main/rpm/*.rpm out/
           tar -czf "out/AdultAristocrat-${APP_VERSION#v}-linux-x64.tar.gz" -C composeApp/build/compose/binaries/main/app AdultAristocrat
       - uses: actions/upload-artifact@v4
         with:
