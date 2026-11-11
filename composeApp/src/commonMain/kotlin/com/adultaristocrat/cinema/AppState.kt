@@ -26,6 +26,7 @@ sealed class Route {
     class Tab(val tab: AppTab) : Route()
     class Detail(val itemId: String) : Route()
     class Folder(val parentId: String, val title: String) : Route()
+    class Person(val personId: String, val name: String) : Route()
     class Player(val itemId: String, val fromStart: Boolean = false, val startMs: Long? = null) : Route()
 }
 

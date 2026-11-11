@@ -199,13 +199,13 @@ private fun DetailContent(state: AppState, model: DetailModel, item: BaseItem) {
                 Spacer(Modifier.height(10.dp))
                 // Постер (обложка), как на ТВ
                 Box(
-                    Modifier.fillMaxWidth(0.66f).align(Alignment.CenterHorizontally).aspectRatio(2f / 3f)
+                    Modifier.fillMaxWidth(0.66f).align(Alignment.CenterHorizontally).aspectRatio(AA.POSTER_RATIO)
                         .clip(RoundedCornerShape(16.dp)).background(AA.SurfaceHigh)
                         .border(1.5.dp, AA.BorderDark, RoundedCornerShape(16.dp))
                 ) {
                     AsyncImage(
                         model = api.posterUrl(item, 900) ?: api.backdropUrl(item, 1000),
-                        contentDescription = item.name, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(),
+                        contentDescription = item.name, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(),
                     )
                     item.officialRating?.let {
                         Badge(it, Modifier.align(Alignment.TopStart).padding(8.dp), bg = Color(0xFFD32F2F))
@@ -221,11 +221,11 @@ private fun DetailContent(state: AppState, model: DetailModel, item: BaseItem) {
             Row(Modifier.fillMaxSize().padding(start = 16.dp, top = 12.dp, end = 16.dp)) {
                 Column(Modifier.fillMaxWidth(0.3f).fillMaxHeight().padding(top = 8.dp, end = 18.dp)) {
                     if (!ui.isTv) BackRow(state)
-                    Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(16.dp)).background(AA.SurfaceHigh)
+                    Box(Modifier.fillMaxWidth().aspectRatio(AA.POSTER_RATIO).clip(RoundedCornerShape(16.dp)).background(AA.SurfaceHigh)
                         .border(1.5.dp, AA.BorderDark, RoundedCornerShape(16.dp))) {
                         AsyncImage(
                             model = api.posterUrl(item, 900), contentDescription = item.name,
-                            contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(),
                         )
                         item.officialRating?.let {
                             Badge(it, Modifier.align(Alignment.TopStart).padding(8.dp), bg = Color(0xFFD32F2F))
@@ -425,12 +425,18 @@ private fun InfoBody(state: AppState, model: DetailModel, item: BaseItem, playFo
     // Актёры и режиссёры — прямоугольные портреты 2:3 (как 1000×1500 у Kodi)
     val actors = item.people.filter { it.type == "Actor" || it.type == "GuestStar" }.take(30)
     val directors = item.people.filter { it.type == "Director" }.take(10)
-    PeopleRow("В ролях", actors, api, ui.isPhone)
-    PeopleRow("Режиссёры", directors, api, ui.isPhone)
+    PeopleRow("В ролях", actors, api, ui.isPhone) { state.navigate(Route.Person(it.id, it.name ?: "")) }
+    PeopleRow("Режиссёры", directors, api, ui.isPhone) { state.navigate(Route.Person(it.id, it.name ?: "")) }
 }
 
 @Composable
-private fun PeopleRow(title: String, people: List<com.adultaristocrat.cinema.api.PersonDto>, api: JellyfinApi, compact: Boolean) {
+private fun PeopleRow(
+    title: String,
+    people: List<com.adultaristocrat.cinema.api.PersonDto>,
+    api: JellyfinApi,
+    compact: Boolean,
+    onClick: (com.adultaristocrat.cinema.api.PersonDto) -> Unit,
+) {
     if (people.isEmpty()) return
     Spacer(Modifier.height(18.dp))
     Text(title, style = MaterialTheme.typography.titleLarge, color = AA.Text)
@@ -441,10 +447,10 @@ private fun PeopleRow(title: String, people: List<com.adultaristocrat.cinema.api
             val shape = RoundedCornerShape(12.dp)
             val w = if (compact) 92.dp else 120.dp
             Column(
-                Modifier.width(w).clickable(interactionSource = fv.interaction, indication = null) { },
+                Modifier.width(w).clickable(interactionSource = fv.interaction, indication = null) { onClick(p) },
             ) {
                 Box(
-                    Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(shape).background(Color(0xFF3A3A3A))
+                    Modifier.fillMaxWidth().aspectRatio(AA.PORTRAIT_RATIO).clip(shape).background(Color(0xFF3A3A3A))
                         .border(if (fv.active) 3.dp else 1.dp, if (fv.active) AA.Red else AA.BorderDark, shape),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -455,7 +461,7 @@ private fun PeopleRow(title: String, people: List<com.adultaristocrat.cinema.api
                     if (url != null) {
                         AsyncImage(
                             model = url, contentDescription = p.name,
-                            contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(),
                         )
                     }
                 }

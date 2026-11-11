@@ -63,11 +63,20 @@ interface Platform {
     val store: KeyValueStore
     val fonts: AppFonts
     val currentYear: Int
+    /** Сегодняшняя дата в виде 2026-11-11 */
+    val todayIso: String
 
     fun openUrl(url: String)
 
     /** Полноэкранный режим для плеера */
     fun setPlayerMode(enabled: Boolean)
+
+    /** Подключены ли наушники (Bluetooth или проводные). Меняется само — это состояние Compose. */
+    val headphonesConnected: Boolean get() = false
+    val headphonesName: String? get() = null
+
+    /** Кнопка наушников: включить Bluetooth / открыть подключение устройств */
+    fun onHeadphonesClick() {}
 
     /** Полный экран по кнопке (только ПК) */
     val canToggleFullscreen: Boolean get() = false

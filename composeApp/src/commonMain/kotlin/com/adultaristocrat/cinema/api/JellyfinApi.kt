@@ -169,6 +169,7 @@ class JellyfinApi(
         limit: Int = AppConfig.PAGE_SIZE,
         recursive: Boolean = true,
         ids: String? = null,
+        personIds: String? = null,
         fields: String = CARD_FIELDS,
     ): ItemsResult = getJson(
         "/Items",
@@ -186,6 +187,7 @@ class JellyfinApi(
             "StartIndex" to startIndex,
             "Limit" to limit,
             "Ids" to ids,
+            "PersonIds" to personIds,
             "Fields" to fields,
             "EnableImageTypes" to "Primary,Backdrop,Thumb",
             "ImageTypeLimit" to 1,
@@ -196,6 +198,14 @@ class JellyfinApi(
     suspend fun item(id: String): BaseItem =
         items(ids = id, types = null, recursive = false, sortBy = "SortName", sortOrder = "Ascending", fields = DETAIL_FIELDS, limit = 1)
             .items.firstOrNull() ?: error("Элемент не найден")
+
+    /** Карточка актёра: биография, дата и место рождения */
+    suspend fun person(id: String): BaseItem {
+        val f = "Overview,ProductionLocations,PremiereDate,EndDate,ProviderIds"
+        return runCatching { getJson<BaseItem>("/Items/$id", mapOf("userId" to userId, "Fields" to f)) }
+            .recoverCatching { getJson<BaseItem>("/Users/$userId/Items/$id", mapOf("Fields" to f)) }
+            .getOrThrow()
+    }
 
     suspend fun resume(limit: Int = AppConfig.PAGE_SIZE, startIndex: Int = 0): ItemsResult = items(
         types = AppConfig.PLAYABLE_TYPES, filters = "IsResumable", sortBy = "DatePlayed", sortOrder = "Descending",

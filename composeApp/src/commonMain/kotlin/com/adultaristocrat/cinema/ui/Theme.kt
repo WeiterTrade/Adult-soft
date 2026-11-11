@@ -16,6 +16,10 @@ import com.adultaristocrat.cinema.AppFonts
 
 /** Палитра из CSS темы NETFIN (Red & Black) */
 object AA {
+    /** Пропорции постера (стандарт 500×709) и портрета актёра (1000×1500) */
+    const val POSTER_RATIO = 500f / 709f
+    const val PORTRAIT_RATIO = 2f / 3f
+
     val Black = Color(0xFF000000)
     val Background = Color(0xFF070707)
     val BackgroundLight = Color(0xFF0D0D0D)

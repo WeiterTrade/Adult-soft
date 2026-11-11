@@ -222,7 +222,7 @@ fun PosterCard(
         Box(
             Modifier
                 .fillMaxWidth()
-                .aspectRatio(2f / 3f)
+                .aspectRatio(AA.POSTER_RATIO)
                 .clip(shape)
                 .background(AA.SurfaceHigh)
                 .border(if (fv.active) 3.dp else 1.5.dp, if (fv.active) AA.Red else AA.BorderDark, shape)
@@ -232,7 +232,7 @@ fun PosterCard(
                 AsyncImage(
                     model = url,
                     contentDescription = item.name,
-                    contentScale = ContentScale.Crop,
+                    contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxSize(),
                 )
             } else {

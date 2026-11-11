@@ -1,6 +1,19 @@
 package com.adultaristocrat.cinema
 
+import android.Manifest
 import android.app.Activity
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothClass
+import android.bluetooth.BluetoothManager
+import android.media.AudioDeviceCallback
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import android.app.UiModeManager
 import android.content.Context
 import android.content.Intent
@@ -49,6 +62,13 @@ class AndroidPlatform(private val activity: Activity) : Platform {
 
     override val currentYear: Int = Calendar.getInstance().get(Calendar.YEAR)
 
+    override val todayIso: String
+        get() {
+            val c = Calendar.getInstance()
+            fun two(v: Int) = if (v < 10) "0$v" else "$v"
+            return "${c.get(Calendar.YEAR)}-${two(c.get(Calendar.MONTH) + 1)}-${two(c.get(Calendar.DAY_OF_MONTH))}"
+        }
+
     override val fonts: AppFonts = loadFonts()
 
     @OptIn(ExperimentalTextApi::class)
@@ -69,6 +89,108 @@ class AndroidPlatform(private val activity: Activity) : Platform {
             FontFamily(Font("fonts/RussoOne-Regular.ttf", assets, FontWeight.Bold))
         } else body
         return AppFonts(body, brand)
+    }
+
+    // ---------------- Наушники ----------------
+
+    private val audio = activity.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var hpConnectedState by mutableStateOf(false)
+    private var hpNameState by mutableStateOf<String?>(null)
+
+    override val headphonesConnected: Boolean get() = hpConnectedState
+    override val headphonesName: String? get() = hpNameState
+
+    private fun refreshHeadphones() {
+        if (Build.VERSION.SDK_INT >= 23) {
+            val types = setOf(
+                AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
+                AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
+                AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
+                AudioDeviceInfo.TYPE_WIRED_HEADSET,
+                AudioDeviceInfo.TYPE_USB_HEADSET,
+                26, // TYPE_BLE_HEADSET (Android 12+)
+                27, // TYPE_BLE_SPEAKER
+            )
+            val dev = audio.getDevices(AudioManager.GET_DEVICES_OUTPUTS).firstOrNull { it.type in types }
+            hpConnectedState = dev != null
+            hpNameState = dev?.productName?.toString()?.takeIf { it.isNotBlank() }
+        } else {
+            @Suppress("DEPRECATION")
+            hpConnectedState = audio.isBluetoothA2dpOn || audio.isWiredHeadsetOn
+        }
+    }
+
+    init {
+        refreshHeadphones()
+        if (Build.VERSION.SDK_INT >= 23) {
+            audio.registerAudioDeviceCallback(object : AudioDeviceCallback() {
+                override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) = refreshHeadphones()
+                override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) = refreshHeadphones()
+            }, mainHandler)
+        }
+    }
+
+    private fun toast(text: String) = Toast.makeText(activity, text, Toast.LENGTH_LONG).show()
+
+    private fun openBluetoothSettings() {
+        try {
+            activity.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
+        } catch (e: Exception) {
+            try {
+                activity.startActivity(Intent(Settings.ACTION_SETTINGS))
+            } catch (_: Exception) {
+                toast("Откройте настройки Bluetooth вручную")
+            }
+        }
+    }
+
+    override fun onHeadphonesClick() {
+        refreshHeadphones()
+        if (hpConnectedState) {
+            toast("Наушники подключены" + (hpNameState?.let { ": $it" } ?: ""))
+            return
+        }
+        val adapter = (activity.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
+        if (adapter == null) {
+            openBluetoothSettings()
+            return
+        }
+        if (Build.VERSION.SDK_INT >= 31 &&
+            activity.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED
+        ) {
+            activity.requestPermissions(arrayOf(Manifest.permission.BLUETOOTH_CONNECT), 42)
+            toast("Разрешите доступ к Bluetooth и нажмите на наушники ещё раз")
+            return
+        }
+        val enabled = try { adapter.isEnabled } catch (e: SecurityException) { true }
+        if (!enabled) {
+            // Включаем Bluetooth: сопряжённые наушники обычно подключаются сами
+            try {
+                @Suppress("MissingPermission")
+                activity.startActivity(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
+                toast("Включаем Bluetooth и ищем ваши наушники…")
+                mainHandler.postDelayed({
+                    refreshHeadphones()
+                    if (!hpConnectedState) openBluetoothSettings()
+                }, 9000)
+            } catch (e: Exception) {
+                openBluetoothSettings()
+            }
+            return
+        }
+        // Bluetooth включён, но наушники не подключены — открываем список устройств
+        val hasPaired = try {
+            @Suppress("MissingPermission")
+            adapter.bondedDevices?.any { d ->
+                val major = d.bluetoothClass?.majorDeviceClass
+                major == BluetoothClass.Device.Major.AUDIO_VIDEO
+            } == true
+        } catch (e: SecurityException) {
+            false
+        }
+        toast(if (hasPaired) "Включите наушники или выберите их в списке" else "Добавьте наушники: «Подключить новое устройство»")
+        openBluetoothSettings()
     }
 
     override fun openUrl(url: String) {

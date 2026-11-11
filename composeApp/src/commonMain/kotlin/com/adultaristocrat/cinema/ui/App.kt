@@ -24,6 +24,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bookmarks
 import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Search
@@ -52,6 +53,7 @@ import com.adultaristocrat.cinema.ui.screens.DetailScreen
 import com.adultaristocrat.cinema.ui.screens.HomeScreen
 import com.adultaristocrat.cinema.ui.screens.LoginScreen
 import com.adultaristocrat.cinema.ui.screens.PlayerScreen
+import com.adultaristocrat.cinema.ui.screens.PersonScreen
 import com.adultaristocrat.cinema.ui.screens.SearchScreen
 import com.adultaristocrat.cinema.ui.screens.SettingsScreen
 
@@ -127,13 +129,13 @@ private fun ShellContent(state: AppState) {
         Box(Modifier.fillMaxSize().statusBarsPadding()) {
             key(route) { RouteContent(state, route) }
             BottomNav(
-                state.currentTab, { state.openTab(it) },
+                state.currentTab, state.platform, { state.openTab(it) },
                 Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(horizontal = 10.dp, vertical = 8.dp),
             )
         }
     } else {
         Row(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-            NavRail(state.currentTab) { state.openTab(it) }
+            NavRail(state.currentTab, state.platform) { state.openTab(it) }
             Box(Modifier.weight(1f).fillMaxHeight()) {
                 key(route) { RouteContent(state, route) }
             }
@@ -152,12 +154,13 @@ private fun RouteContent(state: AppState, route: Route) {
         }
         is Route.Folder -> BrowseScreen(state, route, null, route)
         is Route.Detail -> DetailScreen(state, route)
+        is Route.Person -> PersonScreen(state, route)
         is Route.Player -> PlayerScreen(state, route)
     }
 }
 
 @Composable
-private fun NavRail(current: AppTab, onSelect: (AppTab) -> Unit) {
+private fun NavRail(current: AppTab, platform: com.adultaristocrat.cinema.Platform, onSelect: (AppTab) -> Unit) {
     Column(
         Modifier
             .fillMaxHeight()
@@ -170,7 +173,8 @@ private fun NavRail(current: AppTab, onSelect: (AppTab) -> Unit) {
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Logo(44.dp)
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(6.dp))
+        HeadphonesButton(platform, 56.dp)
         AppTab.entries.forEach { tab ->
             NavButton(tab, tab == current, 56.dp) { onSelect(tab) }
         }
@@ -178,7 +182,7 @@ private fun NavRail(current: AppTab, onSelect: (AppTab) -> Unit) {
 }
 
 @Composable
-private fun BottomNav(current: AppTab, onSelect: (AppTab) -> Unit, modifier: Modifier = Modifier) {
+private fun BottomNav(current: AppTab, platform: com.adultaristocrat.cinema.Platform, onSelect: (AppTab) -> Unit, modifier: Modifier = Modifier) {
     Row(
         modifier
             .fillMaxWidth()
@@ -189,8 +193,9 @@ private fun BottomNav(current: AppTab, onSelect: (AppTab) -> Unit, modifier: Mod
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        HeadphonesButton(platform, 36.dp)
         AppTab.entries.forEach { tab ->
-            NavButton(tab, tab == current, 40.dp) { onSelect(tab) }
+            NavButton(tab, tab == current, 36.dp) { onSelect(tab) }
         }
     }
 }
@@ -217,6 +222,34 @@ private fun NavButton(tab: AppTab, selected: Boolean, size: androidx.compose.ui.
         Icon(
             tab.icon(), tab.title,
             tint = if (selected) AA.Text else if (fv.active) AA.RedHover else Color(0xCCFFFFFF),
+            modifier = Modifier.size(size * 0.5f),
+        )
+    }
+}
+
+/** Наушники: тёмная иконка без красной подсветки; зелёная, когда наушники подключены */
+@Composable
+private fun HeadphonesButton(platform: com.adultaristocrat.cinema.Platform, size: androidx.compose.ui.unit.Dp) {
+    val fv = rememberFocusVisual()
+    val shape = RoundedCornerShape(14.dp)
+    val connected = platform.headphonesConnected
+    Box(
+        Modifier
+            .size(size)
+            .clip(shape)
+            .background(if (fv.active) Color(0xFF1C1C1C) else Color.Transparent)
+            .border(if (fv.active) 2.dp else 0.dp, if (fv.active) AA.Text else Color.Transparent, shape)
+            .clickable(interactionSource = fv.interaction, indication = null) { platform.onHeadphonesClick() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            Icons.Rounded.Headphones,
+            if (connected) "Наушники подключены: ${platform.headphonesName ?: ""}" else "Подключить наушники",
+            tint = when {
+                connected -> AA.Green
+                fv.active -> Color(0xFFBDBDBD)
+                else -> Color(0xFF5C5C5C)
+            },
             modifier = Modifier.size(size * 0.5f),
         )
     }

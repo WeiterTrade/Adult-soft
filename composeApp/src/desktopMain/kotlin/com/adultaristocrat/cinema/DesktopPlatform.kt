@@ -15,6 +15,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import java.awt.GraphicsEnvironment
 import java.awt.Desktop
+import javax.sound.sampled.AudioSystem
+import javax.swing.SwingUtilities
+import kotlin.concurrent.thread
 import java.net.InetAddress
 import java.net.URI
 import java.time.Year
@@ -44,6 +47,7 @@ class DesktopPlatform(private val windowState: WindowState) : Platform {
     override val isTv: Boolean = false
     override val isDesktop: Boolean = true
     override val currentYear: Int = Year.now().value
+    override val todayIso: String get() = java.time.LocalDate.now().toString()
     override val fonts: AppFonts = loadFonts()
 
     private var placementBeforePlayer: WindowPlacement? = null
@@ -63,6 +67,80 @@ class DesktopPlatform(private val windowState: WindowState) : Platform {
         val brandBytes = bytes("fonts/RussoOne-Regular.ttf")
         val brand = if (brandBytes != null) FontFamily(Font("RussoOne", brandBytes, FontWeight.Bold)) else body
         return AppFonts(body, brand)
+    }
+
+    // ---------------- Наушники ----------------
+
+    private var hpConnectedState by mutableStateOf(false)
+    private var hpNameState by mutableStateOf<String?>(null)
+    override val headphonesConnected: Boolean get() = hpConnectedState
+    override val headphonesName: String? get() = hpNameState
+
+    private val osName = (System.getProperty("os.name") ?: "").lowercase()
+    private val isWindows = osName.startsWith("windows")
+
+    init {
+        // Проверяем подключённые наушники каждые 5 секунд (в фоне)
+        thread(isDaemon = true, name = "headphones-watch") {
+            while (true) {
+                val found = runCatching { detectHeadphones() }.getOrNull()
+                SwingUtilities.invokeLater {
+                    hpConnectedState = found != null
+                    hpNameState = found
+                }
+                Thread.sleep(5000)
+            }
+        }
+    }
+
+    /** Имя подключённых наушников или null */
+    private fun detectHeadphones(): String? {
+        if (!isWindows) {
+            // Linux: PulseAudio / PipeWire — Bluetooth-устройства называются bluez_*
+            val out = runCatching {
+                val p = ProcessBuilder("pactl", "list", "short", "sinks").redirectErrorStream(true).start()
+                p.inputStream.bufferedReader().readText().also { p.waitFor() }
+            }.getOrNull()
+            out?.lineSequence()?.firstOrNull { it.contains("bluez") }?.let { return "Bluetooth" }
+        }
+        // Windows (и запасной вариант): ищем аудиовыход с «наушниковым» названием
+        val keywords = listOf(
+            "bluetooth", "hands-free", "handsfree", "headphone", "headset", "наушник", "гарнитур",
+            "airpods", "buds", "wh-", "wf-", "jbl", "a2dp",
+        )
+        return AudioSystem.getMixerInfo().map { "${it.name} ${it.description}" }
+            .firstOrNull { name ->
+                val n = name.lowercase()
+                keywords.any { n.contains(it) } && !n.contains("mix")
+            }
+            ?.substringBefore(",")
+            ?.trim()
+    }
+
+    override fun onHeadphonesClick() {
+        // Открываем системное окно Bluetooth: там включается Bluetooth и подключаются наушники
+        runCatching {
+            if (isWindows) {
+                val v = System.getProperty("os.version") ?: ""
+                if (v.startsWith("6.")) {
+                    // Windows 7 / 8: «Устройства Bluetooth»
+                    ProcessBuilder("control.exe", "bthprops.cpl").start()
+                } else {
+                    // Windows 10 / 11: Параметры → Bluetooth и устройства
+                    ProcessBuilder("cmd", "/c", "start", "", "ms-settings:bluetooth").start()
+                }
+            } else {
+                val tries = listOf(
+                    listOf("blueman-manager"),
+                    listOf("gnome-control-center", "bluetooth"),
+                    listOf("systemsettings", "kcm_bluetooth"),
+                    listOf("xdg-open", "settings://bluetooth"),
+                )
+                for (cmd in tries) {
+                    if (runCatching { ProcessBuilder(cmd).start() }.isSuccess) break
+                }
+            }
+        }
     }
 
     override fun openUrl(url: String) {
