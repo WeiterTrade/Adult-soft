@@ -11,7 +11,8 @@ permissions:
   contents: write
 
 env:
-  APP_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '1.0.0' }}
+  # Тег v1.2.3 → версия 1.2.3, иначе 1.0.<номер сборки> (чтобы установщики обновлялись поверх)
+  APP_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('1.0.{0}', github.run_number) }}
 
 jobs:
   android:
@@ -127,6 +128,34 @@ jobs:
         with:
           name: linux
           path: out/*
+
+  latest:
+    name: Свежая сборка (прямые ссылки на файлы)
+    # Публикуем даже если какая-то из платформ упала — то, что собралось
+    if: always() && github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    needs: [ android, windows, linux ]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Переносим метку latest на эту сборку
+        run: |
+          git tag -f latest
+          git push -f origin latest
+      - name: Обновляем выпуск «latest»
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls dist/* > /dev/null 2>&1 || { echo "Нет собранных файлов"; exit 0; }
+          ls -la dist
+          gh release delete latest --yes || true
+          gh release create latest dist/* \
+            --title "Свежая сборка ${APP_VERSION}" \
+            --notes "Автоматическая сборка из ветки ${GITHUB_REF_NAME}, коммит ${GITHUB_SHA::7}. APK: AdultAristocrat-android.apk" \
+            --prerelease
 
   release:
     name: Публикация релиза
