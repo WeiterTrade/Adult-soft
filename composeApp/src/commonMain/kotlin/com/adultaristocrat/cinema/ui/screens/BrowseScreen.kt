@@ -10,6 +10,29 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Shuffle
+import androidx.compose.material.icons.rounded.DeleteSweep
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.window.Dialog
+import com.adultaristocrat.cinema.ui.AA
+import com.adultaristocrat.cinema.ui.AAButton
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,7 +89,7 @@ class BrowseModel(state: AppState, val tab: AppTab?, val folder: Route.Folder?) 
             tab == AppTab.HISTORY -> {
                 if (start > 0) ItemsResult(emptyList(), 0)
                 else if (state.offlineMode) {
-                    val ids = state.offline.state.positions.keys
+                    val ids = state.offline.state.positions.filterValues { it != 0L }.keys
                     val list = state.offline.items().filter { it.id in ids }
                     ItemsResult(list, list.size)
                 } else {
@@ -96,6 +119,55 @@ class BrowseModel(state: AppState, val tab: AppTab?, val folder: Route.Folder?) 
 @Composable
 fun BrowseScreen(state: AppState, route: Route, tab: AppTab?, folder: Route.Folder?) {
     val model = state.model(route) { BrowseModel(state, tab, folder) }
+    var confirmClear by remember { mutableStateOf(false) }
+    var clearing by remember { mutableStateOf(false) }
+
+    /** Очистка истории: на сервере фильмы помечаются «не просмотрено» (сбрасывается и позиция) */
+    fun clearHistory() {
+        confirmClear = false
+        clearing = true
+        val items = model.grid.items.toList()
+        state.scope.launch {
+            try {
+                if (state.offlineMode) {
+                    items.forEach { state.offline.savePosition(it.id, 0, 0) }
+                    state.offline.flush()
+                } else {
+                    items.forEach { runCatching { state.api.setPlayed(it.id, false) } }
+                }
+                state.showToast("История просмотров очищена")
+            } finally {
+                clearing = false
+                model.grid.reload()
+            }
+        }
+    }
+
+    if (confirmClear) {
+        val okFocus = remember { FocusRequester() }
+        Dialog(onDismissRequest = { confirmClear = false }) {
+            Column(
+                Modifier.widthIn(max = 460.dp).background(Color(0xF5080000), RoundedCornerShape(18.dp))
+                    .border(1.dp, AA.Border, RoundedCornerShape(18.dp)).padding(22.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Text("Очистить историю просмотров?", color = AA.Text, style = MaterialTheme.typography.titleLarge)
+                Text(
+                    "Фильмы пропадут из истории, а места остановки сбросятся — «Продолжить» начнёт их сначала.",
+                    color = AA.TextDim,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    AAButton("Очистить", Icons.Rounded.DeleteSweep, { clearHistory() }, Modifier.focusRequester(okFocus))
+                    AAButton("Отмена", Icons.Rounded.Close, { confirmClear = false }, primary = false)
+                }
+            }
+        }
+        LaunchedEffect(Unit) {
+            delay(100)
+            runCatching { okFocus.requestFocus() }
+        }
+    }
+
     PagedGrid(
         model = model.grid,
         api = state.api,
@@ -115,6 +187,14 @@ fun BrowseScreen(state: AppState, route: Route, tab: AppTab?, folder: Route.Fold
                     SectionTitle(model.title, Modifier.weight(1f))
                     if (tab == AppTab.RANDOM) {
                         AAChip("Перемешать", false, { model.grid.reload() }, icon = Icons.Rounded.Shuffle)
+                        Spacer(Modifier.width(4.dp))
+                    }
+                    // Корзина — очистить историю просмотров
+                    if (tab == AppTab.HISTORY && model.grid.items.isNotEmpty()) {
+                        AAChip(
+                            if (clearing) "Очистка…" else "", false,
+                            { if (!clearing) confirmClear = true }, icon = Icons.Rounded.DeleteSweep,
+                        )
                         Spacer(Modifier.width(4.dp))
                     }
                 }
