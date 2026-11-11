@@ -119,9 +119,16 @@ fun AndroidVideoSurface(
 
     DisposableEffect(player) {
         var reportedTrackProblem = false
+        var checkedSeekable = false
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_ENDED) events.onEnded()
+                if (playbackState == Player.STATE_READY && !checkedSeekable) {
+                    checkedSeekable = true
+                    // MKV без индекса (Cues): ExoPlayer при перемотке начинает сначала.
+                    // Переходим на HLS-переупаковку сервером — как в браузере.
+                    if (!player.isCurrentMediaItemSeekable) events.onUnseekable()
+                }
             }
 
             override fun onPlayerError(error: PlaybackException) {

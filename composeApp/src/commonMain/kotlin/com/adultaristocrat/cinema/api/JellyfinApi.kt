@@ -232,6 +232,18 @@ class JellyfinApi(
             q("mediaSourceId", mediaSourceId) + q("PlaySessionId", playSessionId) +
             q("DeviceId", deviceId) + q("api_key", token)
 
+    /**
+     * HLS без перекодирования видео (только «переупаковка», как делает веб-версия).
+     * Нужен, когда файл нельзя перематывать напрямую: перемотка и сцены работают как в браузере.
+     * Звук приводится к AAC, если исходный кодек устройство может не потянуть.
+     */
+    fun remuxUrl(itemId: String, mediaSourceId: String?, playSessionId: String?): String =
+        "$baseUrl/Videos/$itemId/master.m3u8?VideoCodec=h264,hevc,vp9,av1&AudioCodec=aac,mp3,opus,flac" +
+            "&AllowVideoStreamCopy=true&AllowAudioStreamCopy=true&SegmentContainer=mp4" +
+            "&TranscodingMaxAudioChannels=6&MaxAudioChannels=6&MaxStreamingBitrate=200000000" +
+            q("MediaSourceId", mediaSourceId) + q("PlaySessionId", playSessionId) +
+            q("DeviceId", deviceId) + q("api_key", token)
+
     /** HLS с перекодированием в H.264 + AAC (если устройство не тянет оригинал) */
     fun transcodeUrl(itemId: String, mediaSourceId: String?, playSessionId: String?, maxBitrate: Int = 20_000_000): String =
         "$baseUrl/Videos/$itemId/master.m3u8?VideoCodec=h264&AudioCodec=aac,mp3" +

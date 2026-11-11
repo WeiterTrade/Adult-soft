@@ -103,6 +103,9 @@ class DesktopPlatform(private val windowState: WindowState) : Platform {
         }
     }
 
+    /** Ширина окна в обычном (не развёрнутом) состоянии, в пикселях экрана */
+    val restoredWidth: Int get() = restoreBounds?.second?.width?.value?.toInt() ?: 1280
+
     fun minimize() {
         windowState.isMinimized = true
     }

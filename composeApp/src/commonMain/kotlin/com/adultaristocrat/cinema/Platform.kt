@@ -29,6 +29,8 @@ interface PlayerEvents {
     fun onEnded()
     fun onError(message: String)
     fun onBack()
+    /** Файл нельзя перематывать напрямую (например, MKV без индекса) — нужен HLS */
+    fun onUnseekable() {}
 }
 
 /** Дорожка звука или субтитров */

@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.window.WindowDraggableArea
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CropSquare
@@ -57,6 +56,7 @@ import androidx.compose.ui.window.FrameWindowScope
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowState
+import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.adultaristocrat.cinema.ui.AA
@@ -64,6 +64,10 @@ import com.adultaristocrat.cinema.ui.App
 import org.jetbrains.skia.Image
 import java.awt.Cursor
 import java.awt.Dimension
+import java.awt.MouseInfo
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.awt.ComposeWindow
 
 fun main() {
     // Windows 7/8: нет DirectX 12 — рисуем через OpenGL (или программно, если задано вручную)
@@ -82,7 +86,11 @@ fun main() {
     }.getOrNull()
 
     application {
-        val windowState = rememberWindowState(width = 1280.dp, height = 800.dp)
+        val windowState = rememberWindowState(
+            position = WindowPosition(Alignment.Center),
+            width = 1280.dp,
+            height = 800.dp,
+        )
         val platform = remember { DesktopPlatform(windowState) }
         val appState = remember { AppState(platform) }
 
@@ -117,7 +125,11 @@ fun main() {
                 }
             },
         ) {
-            LaunchedEffect(Unit) { window.minimumSize = Dimension(900, 560) }
+            LaunchedEffect(Unit) {
+                window.minimumSize = Dimension(900, 560)
+                // Всегда открываемся развёрнутыми на весь экран (без перекрытия панели задач)
+                if (!platform.isMaximized) platform.toggleMaximize()
+            }
             val fullscreen = windowState.placement == WindowPlacement.Fullscreen
             Box(
                 Modifier.fillMaxSize().background(Color.Black)
@@ -144,11 +156,9 @@ private fun FrameWindowScope.TitleBar(platform: DesktopPlatform, hasIcon: Boolea
             .border(width = 0.5.dp, color = AA.BorderDark),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        WindowDraggableArea(Modifier.weight(1f).fillMaxHeight()) {
+        Box(Modifier.weight(1f).fillMaxHeight().windowDrag(window, platform)) {
             Row(
-                Modifier.fillMaxSize()
-                    .pointerInput(Unit) { detectTapGestures(onDoubleTap = { platform.toggleMaximize() }) }
-                    .padding(start = 14.dp),
+                Modifier.fillMaxSize().padding(start = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(
@@ -231,5 +241,45 @@ private fun ResizeHandles(state: WindowState) {
                 .pointerHoverIcon(PointerIcon(Cursor(Cursor.SE_RESIZE_CURSOR)))
                 .pointerInput(Unit) { detectDragGestures { change, drag -> change.consume(); resize(drag.x, drag.y) } }
         )
+    }
+}
+
+/**
+ * Перетаскивание окна за шапку (по экранным координатам, без рывков).
+ * Двойной щелчок — развернуть / восстановить. Если окно развёрнуто и его потянуть — оно восстанавливается.
+ */
+private fun Modifier.windowDrag(window: ComposeWindow, platform: DesktopPlatform): Modifier = this.pointerInput(Unit) {
+    var lastClick = 0L
+    awaitEachGesture {
+        awaitFirstDown(requireUnconsumed = false)
+        val now = System.currentTimeMillis()
+        if (now - lastClick < 400) {
+            lastClick = 0L
+            platform.toggleMaximize()
+            return@awaitEachGesture
+        }
+        lastClick = now
+        val start = MouseInfo.getPointerInfo()?.location ?: return@awaitEachGesture
+        var winX = window.x
+        var winY = window.y
+        var startX = start.x
+        var startY = start.y
+        while (true) {
+            val event = awaitPointerEvent()
+            if (event.changes.none { it.pressed }) break
+            val p = MouseInfo.getPointerInfo()?.location ?: break
+            if (platform.isMaximized) {
+                if (kotlin.math.abs(p.x - startX) + kotlin.math.abs(p.y - startY) < 8) continue
+                // Тянем развёрнутое окно — восстанавливаем размер, окно «прилипает» к курсору
+                val ratio = (p.x - window.x).toFloat() / window.width.coerceAtLeast(1)
+                platform.toggleMaximize()
+                winX = p.x - (platform.restoredWidth * ratio).toInt()
+                winY = p.y - 18
+                startX = p.x
+                startY = p.y
+            }
+            window.setLocation(winX + (p.x - startX), winY + (p.y - startY))
+            event.changes.forEach { it.consume() }
+        }
     }
 }

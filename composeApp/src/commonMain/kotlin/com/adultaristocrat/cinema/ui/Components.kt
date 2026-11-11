@@ -278,13 +278,26 @@ private fun BoxScope.CardFooter(item: BaseItem, compact: Boolean) {
         Modifier.align(Alignment.BottomStart).fillMaxWidth().background(AA.cardFooterGradient)
             .padding(start = 6.dp, end = 6.dp, top = 18.dp, bottom = 5.dp)
     ) {
-        if (!compact) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    item.genres.firstOrNull() ?: "",
-                    fontSize = 12.sp, fontWeight = FontWeight.Bold, color = AA.Text,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+        // Страна с флагом (если страны нет — жанр)
+        val country = item.productionLocations.firstNotNullOfOrNull { Countries.find(it) }
+        val fallback = item.productionLocations.firstOrNull() ?: item.genres.firstOrNull()
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (country != null) {
+                AsyncImage(
+                    model = country.flagUrl,
+                    contentDescription = country.ru,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(width = if (compact) 14.dp else 18.dp, height = if (compact) 10.dp else 13.dp)
+                        .clip(RoundedCornerShape(2.dp)),
                 )
+                Spacer(Modifier.width(4.dp))
+            }
+            Text(
+                country?.ru ?: fallback ?: "",
+                fontSize = if (compact) 10.sp else 12.sp, fontWeight = FontWeight.Bold, color = AA.Text,
+                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+            )
+            if (!compact) {
                 Icon(
                     if (item.isSeries || item.isEpisode) Icons.Rounded.Tv else Icons.Rounded.Movie, null,
                     tint = if (item.isSeries || item.isEpisode) Color(0xFF4FC3F7) else AA.Green,

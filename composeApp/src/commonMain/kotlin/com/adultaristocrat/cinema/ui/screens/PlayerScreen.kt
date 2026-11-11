@@ -35,7 +35,8 @@ class PlayerModel(private val state: AppState, private val route: Route.Player) 
     private var item: BaseItem? = null
     private var mediaSourceId: String? = null
     private var playSessionId: String? = null
-    private var transcoding = false
+    private enum class Mode { DIRECT, REMUX, TRANSCODE }
+    private var mode = Mode.DIRECT
     private var lastPosMs = 0L
     private var lastPaused = false
     private var ticksSinceReport = 0
@@ -56,7 +57,7 @@ class PlayerModel(private val state: AppState, private val route: Route.Player) 
                 val startMs = route.startMs
                     ?: if (route.fromStart) 0L else (it.userData?.playbackPositionTicks ?: 0L) / JellyfinApi.TICKS_PER_MS
                 lastPosMs = startMs
-                transcoding = state.forceTranscode
+                mode = if (state.forceTranscode) Mode.TRANSCODE else Mode.DIRECT
                 request = PlaybackRequest(
                     url = buildUrl(),
                     startPositionMs = startMs,
@@ -76,8 +77,11 @@ class PlayerModel(private val state: AppState, private val route: Route.Player) 
 
     private fun buildUrl(): String {
         val id = item?.id ?: route.itemId
-        return if (transcoding) api.transcodeUrl(id, mediaSourceId, playSessionId)
-        else api.directStreamUrl(id, mediaSourceId, playSessionId)
+        return when (mode) {
+            Mode.DIRECT -> api.directStreamUrl(id, mediaSourceId, playSessionId)
+            Mode.REMUX -> api.remuxUrl(id, mediaSourceId, playSessionId)
+            Mode.TRANSCODE -> api.transcodeUrl(id, mediaSourceId, playSessionId)
+        }
     }
 
     private fun report() = PlaybackReport(
@@ -86,7 +90,11 @@ class PlayerModel(private val state: AppState, private val route: Route.Player) 
         playSessionId = playSessionId,
         positionTicks = lastPosMs * JellyfinApi.TICKS_PER_MS,
         isPaused = lastPaused,
-        playMethod = if (transcoding) "Transcode" else "DirectPlay",
+        playMethod = when (mode) {
+            Mode.DIRECT -> "DirectPlay"
+            Mode.REMUX -> "DirectStream"
+            Mode.TRANSCODE -> "Transcode"
+        },
     )
 
     override fun onProgress(positionMs: Long, durationMs: Long, isPaused: Boolean) {
@@ -117,13 +125,26 @@ class PlayerModel(private val state: AppState, private val route: Route.Player) 
 
     override fun onError(message: String) {
         val r = request
-        if (!transcoding && r != null && !state.platform.isDesktop) {
-            // Устройство не смогло воспроизвести оригинал — просим сервер перекодировать
-            transcoding = true
-            request = r.copy(url = buildUrl(), startPositionMs = lastPosMs, key = "${route.itemId}-${attempt++}")
+        val next = when (mode) {
+            Mode.DIRECT -> Mode.REMUX      // сначала пробуем без перекодирования видео
+            Mode.REMUX -> Mode.TRANSCODE   // затем полное перекодирование
+            Mode.TRANSCODE -> null
+        }
+        if (r != null && next != null && !state.platform.isDesktop) {
+            switchMode(next)
         } else {
             error = "Ошибка воспроизведения: $message"
         }
+    }
+
+    override fun onUnseekable() {
+        if (mode == Mode.DIRECT && !state.platform.isDesktop) switchMode(Mode.REMUX)
+    }
+
+    private fun switchMode(m: Mode) {
+        val r = request ?: return
+        mode = m
+        request = r.copy(url = buildUrl(), startPositionMs = lastPosMs, key = "${route.itemId}-${attempt++}")
     }
 
     override fun onBack() {

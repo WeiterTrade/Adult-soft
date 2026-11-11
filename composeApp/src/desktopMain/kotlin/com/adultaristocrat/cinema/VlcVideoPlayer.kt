@@ -57,7 +57,7 @@ object Vlc {
             NativeLibrary.addSearchPath("vlc", dir.absolutePath)
             NativeLibrary.addSearchPath("vlccore", dir.absolutePath)
         }
-        MediaPlayerFactory("--no-video-title-show", "--quiet", "--network-caching=3000", "--no-snapshot-preview")
+        MediaPlayerFactory("--no-video-title-show", "--quiet", "--network-caching=1500", "--no-snapshot-preview", "--input-fast-seek")
     } catch (t: Throwable) {
         error = t.message ?: t.toString()
         null
@@ -186,8 +186,9 @@ fun VlcVideoSurface(
         }
         player.events().addMediaPlayerEventListener(listener)
         val startSec = request.startPositionMs / 1000.0
-        if (startSec > 1) player.media().play(request.url, ":start-time=$startSec")
-        else player.media().play(request.url)
+        // input-fast-seek: перемотка к ближайшему ключевому кадру — сцены переключаются быстрее
+        if (startSec > 1) player.media().play(request.url, ":start-time=$startSec", ":input-fast-seek")
+        else player.media().play(request.url, ":input-fast-seek")
         onControl(control)
         onDispose {
             onControl(null)

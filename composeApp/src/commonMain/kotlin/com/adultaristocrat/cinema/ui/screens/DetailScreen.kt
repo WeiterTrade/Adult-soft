@@ -68,6 +68,7 @@ import com.adultaristocrat.cinema.ui.AA
 import com.adultaristocrat.cinema.ui.AAButton
 import com.adultaristocrat.cinema.ui.AAChip
 import com.adultaristocrat.cinema.ui.Badge
+import com.adultaristocrat.cinema.ui.Countries
 import com.adultaristocrat.cinema.ui.IconAction
 import com.adultaristocrat.cinema.ui.LoadingBox
 import com.adultaristocrat.cinema.ui.LocalUi
@@ -196,11 +197,19 @@ private fun DetailContent(state: AppState, model: DetailModel, item: BaseItem) {
                 BackRow(state)
                 TitleBlock(item)
                 Spacer(Modifier.height(10.dp))
-                Box(Modifier.fillMaxWidth().aspectRatio(16f / 10f).clip(RoundedCornerShape(16.dp)).background(AA.SurfaceHigh)) {
+                // Постер (обложка), как на ТВ
+                Box(
+                    Modifier.fillMaxWidth(0.66f).align(Alignment.CenterHorizontally).aspectRatio(2f / 3f)
+                        .clip(RoundedCornerShape(16.dp)).background(AA.SurfaceHigh)
+                        .border(1.5.dp, AA.BorderDark, RoundedCornerShape(16.dp))
+                ) {
                     AsyncImage(
-                        model = api.backdropUrl(item, 1000) ?: api.posterUrl(item),
+                        model = api.posterUrl(item, 900) ?: api.backdropUrl(item, 1000),
                         contentDescription = item.name, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(),
                     )
+                    item.officialRating?.let {
+                        Badge(it, Modifier.align(Alignment.TopStart).padding(8.dp), bg = Color(0xFFD32F2F))
+                    }
                     item.runtimeMinutes?.let {
                         Badge(runtimeText(it), Modifier.align(Alignment.BottomEnd).padding(8.dp))
                     }
@@ -302,20 +311,32 @@ private fun InfoBody(state: AppState, model: DetailModel, item: BaseItem, playFo
     val api = state.api
     val ui = LocalUi.current
 
-    // Год, страна, жанры
-    val tags = buildList {
-        item.yearLabel?.let { add(it) }
-        addAll(item.productionLocations.take(2))
-        addAll(item.genres.take(5))
+    // Год, страна (с флагом), жанры
+    val tags: List<Pair<String, String?>> = buildList {
+        item.yearLabel?.let { add(it to null) }
+        item.productionLocations.take(2).forEach { loc ->
+            val c = Countries.find(loc)
+            add((c?.ru ?: loc) to c?.flagUrl)
+        }
+        item.genres.take(5).forEach { add(it to null) }
     }
     if (tags.isNotEmpty()) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            tags.forEach { t ->
-                Text(
-                    t, color = AA.Text, style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(AA.SurfaceHigher)
+            tags.forEach { (t, flag) ->
+                Row(
+                    Modifier.clip(RoundedCornerShape(10.dp)).background(AA.SurfaceHigher)
                         .padding(horizontal = 12.dp, vertical = 6.dp),
-                )
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (flag != null) {
+                        AsyncImage(
+                            model = flag, contentDescription = null, contentScale = ContentScale.Crop,
+                            modifier = Modifier.size(width = 20.dp, height = 14.dp).clip(RoundedCornerShape(2.dp)),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                    }
+                    Text(t, color = AA.Text, style = MaterialTheme.typography.labelLarge)
+                }
             }
         }
         Spacer(Modifier.height(14.dp))
