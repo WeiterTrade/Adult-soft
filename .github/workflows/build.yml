@@ -132,7 +132,7 @@ jobs:
           mkdir -p out
           cp composeApp/build/compose/binaries/main/deb/*.deb out/
           cp composeApp/build/compose/binaries/main/rpm/*.rpm out/
-          tar -czf "out/AdultAristocrat-${APP_VERSION#v}-linux-x64.tar.gz" -C composeApp/build/compose/binaries/main/app AdultAristocrat
+          tar -czf "out/AdultAristocrat-${APP_VERSION#v}-linux-x64.tar.gz" -C composeApp/build/compose/binaries/main/app "Adult Aristocrat"
       - uses: actions/upload-artifact@v4
         with:
           name: linux
