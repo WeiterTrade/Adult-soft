@@ -24,10 +24,21 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
+      - name: Проверка файлов проекта
+        shell: bash
+        run: |
+          ls -la
+          for f in gradlew settings.gradle.kts scripts/fetch-assets.sh composeApp/build.gradle.kts; do
+            if [ ! -f "$f" ]; then
+              echo "::error::Нет файла $f в корне репозитория. Загрузите СОДЕРЖИМОЕ архива (а не папку aa-cinema целиком)."
+              exit 1
+            fi
+          done
+          chmod +x gradlew
       - name: Шрифты
         run: bash scripts/fetch-assets.sh
       - name: Сборка APK
-        run: ./gradlew :composeApp:assembleRelease --stacktrace
+        run: bash ./gradlew :composeApp:assembleRelease --stacktrace
       - name: Переименование
         run: |
           mkdir -p out
@@ -50,12 +61,23 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
+      - name: Проверка файлов проекта
+        shell: bash
+        run: |
+          ls -la
+          for f in gradlew settings.gradle.kts scripts/fetch-assets.sh composeApp/build.gradle.kts; do
+            if [ ! -f "$f" ]; then
+              echo "::error::Нет файла $f в корне репозитория. Загрузите СОДЕРЖИМОЕ архива (а не папку aa-cinema целиком)."
+              exit 1
+            fi
+          done
+          chmod +x gradlew
       - name: Шрифты
         run: bash scripts/fetch-assets.sh
       - name: VLC (встраивается в программу)
         run: bash scripts/fetch-vlc-windows.sh
       - name: Сборка установщиков и портативной версии
-        run: ./gradlew :composeApp:packageMsi :composeApp:packageExe :composeApp:createDistributable --stacktrace
+        run: bash ./gradlew :composeApp:packageMsi :composeApp:packageExe :composeApp:createDistributable --stacktrace
       - name: Упаковка
         run: |
           mkdir -p out
@@ -81,10 +103,21 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
+      - name: Проверка файлов проекта
+        shell: bash
+        run: |
+          ls -la
+          for f in gradlew settings.gradle.kts scripts/fetch-assets.sh composeApp/build.gradle.kts; do
+            if [ ! -f "$f" ]; then
+              echo "::error::Нет файла $f в корне репозитория. Загрузите СОДЕРЖИМОЕ архива (а не папку aa-cinema целиком)."
+              exit 1
+            fi
+          done
+          chmod +x gradlew
       - name: Шрифты
         run: bash scripts/fetch-assets.sh
       - name: Сборка
-        run: ./gradlew :composeApp:packageDeb :composeApp:createDistributable --stacktrace
+        run: bash ./gradlew :composeApp:packageDeb :composeApp:createDistributable --stacktrace
       - name: Упаковка
         run: |
           mkdir -p out
