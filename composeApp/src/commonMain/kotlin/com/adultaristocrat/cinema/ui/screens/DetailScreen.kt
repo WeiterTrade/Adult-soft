@@ -68,6 +68,7 @@ import com.adultaristocrat.cinema.ui.AA
 import com.adultaristocrat.cinema.ui.AAButton
 import com.adultaristocrat.cinema.ui.AAChip
 import com.adultaristocrat.cinema.ui.Badge
+import com.adultaristocrat.cinema.ui.AdaptivePhoto
 import com.adultaristocrat.cinema.ui.Countries
 import com.adultaristocrat.cinema.ui.IconAction
 import com.adultaristocrat.cinema.ui.LoadingBox
@@ -464,7 +465,11 @@ private fun PeopleRow(
     Spacer(Modifier.height(18.dp))
     Text(title, style = MaterialTheme.typography.titleLarge, color = AA.Text)
     Spacer(Modifier.height(8.dp))
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(4.dp)) {
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.Top,
+        contentPadding = PaddingValues(4.dp),
+    ) {
         items(people) { p ->
             val fv = rememberFocusVisual()
             val shape = RoundedCornerShape(12.dp)
@@ -472,22 +477,16 @@ private fun PeopleRow(
             Column(
                 Modifier.width(w).clickable(interactionSource = fv.interaction, indication = null) { onClick(p) },
             ) {
-                Box(
-                    Modifier.fillMaxWidth().aspectRatio(AA.PORTRAIT_RATIO).clip(shape).background(Color(0xFF3A3A3A))
-                        .border(if (fv.active) 3.dp else 1.dp, if (fv.active) AA.Red else AA.BorderDark, shape),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    val initials = (p.name ?: "").split(" ").filter { it.isNotBlank() }.take(2)
-                        .joinToString("") { it.take(1).uppercase() }
-                    Text(initials, color = Color(0xFFE0E0E0), fontSize = 26.sp, fontWeight = FontWeight.Bold)
-                    val url = api.personUrl(p, 600)
-                    if (url != null) {
-                        AsyncImage(
-                            model = url, contentDescription = p.name,
-                            contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(),
-                        )
-                    }
-                }
+                // Рамка подстраивается под пропорции фото — без серых полос
+                AdaptivePhoto(
+                    url = api.personUrl(p, 600),
+                    name = p.name ?: "",
+                    borderWidth = if (fv.active) 3.dp else 1.dp,
+                    borderColor = if (fv.active) AA.Red else AA.BorderDark,
+                    initialsSize = 26.sp,
+                    minRatio = 0.5f,
+                    maxRatio = 1.0f,
+                )
                 Spacer(Modifier.height(4.dp))
                 Text(
                     p.name ?: "", color = if (fv.active) AA.RedHover else AA.Text, fontSize = 13.sp,

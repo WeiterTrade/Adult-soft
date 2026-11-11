@@ -19,6 +19,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -126,10 +132,13 @@ fun PagedGrid(
     wide: Boolean = false,
     emptyText: String = "Здесь пока пусто",
     autoFocus: Boolean = true,
+    /** Куда перевести фокус по стрелке «вверх» с первого ряда (например, фото актёра) */
+    headerFocus: FocusRequester? = null,
     header: (LazyGridScope.() -> Unit)? = null,
 ) {
     val ui = LocalUi.current
     val requester = remember(model) { FocusRequester() }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(model) {
         if (model.items.isEmpty() && !model.loading) model.loadMore()
@@ -150,7 +159,25 @@ fun PagedGrid(
     LazyVerticalGrid(
         columns = GridCells.Adaptive(if (wide) ui.wideMin else ui.cardMin),
         state = model.gridState,
-        modifier = modifier,
+        // Пульт: «вверх» с первого ряда фильмов сначала прокручивает к шапке страницы,
+        // а не перебрасывает фокус на боковую панель
+        modifier = modifier.onPreviewKeyEvent { e ->
+            if (e.type != KeyEventType.KeyDown || e.key != Key.DirectionUp) return@onPreviewKeyEvent false
+            val info = model.gridState.layoutInfo
+            fun keyOf(i: Int) = "$i:"
+            val firstCard = info.visibleItemsInfo.firstOrNull { (it.key as? String)?.startsWith(keyOf(0)) == true }
+            val focused = info.visibleItemsInfo.firstOrNull { (it.key as? String)?.startsWith(keyOf(model.focusIndex)) == true }
+            if (firstCard == null || focused == null || focused.row != firstCard.row) return@onPreviewKeyEvent false
+            val atTop = model.gridState.firstVisibleItemIndex == 0 && model.gridState.firstVisibleItemScrollOffset == 0
+            scope.launch {
+                runCatching { model.gridState.animateScrollToItem(0) }
+                if (headerFocus != null) {
+                    delay(60)
+                    runCatching { headerFocus.requestFocus() }
+                }
+            }
+            headerFocus != null || !atTop
+        },
         contentPadding = PaddingValues(start = ui.hPad, end = ui.hPad, top = 8.dp, bottom = if (ui.isPhone) 96.dp else 32.dp),
         horizontalArrangement = Arrangement.spacedBy(if (ui.isPhone) 2.dp else 8.dp),
         verticalArrangement = Arrangement.spacedBy(if (ui.isPhone) 4.dp else 10.dp),

@@ -40,6 +40,9 @@ import com.adultaristocrat.cinema.Route
 import com.adultaristocrat.cinema.api.BaseItem
 import com.adultaristocrat.cinema.ui.AA
 import com.adultaristocrat.cinema.ui.Countries
+import com.adultaristocrat.cinema.ui.AdaptivePhoto
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.focusRequester
 import com.adultaristocrat.cinema.ui.GridModel
 import com.adultaristocrat.cinema.ui.LocalUi
 import com.adultaristocrat.cinema.ui.PagedGrid
@@ -51,6 +54,7 @@ class PersonModel(state: AppState, val personId: String, val name: String) {
     private val api = state.api
     var person by mutableStateOf<BaseItem?>(null)
     var bioExpanded by mutableStateOf(false)
+    val photoFocus = androidx.compose.ui.focus.FocusRequester()
 
     /** Фильмы с этим актёром, которые есть в кинотеатре */
     val grid = GridModel(state.scope) { start, limit ->
@@ -114,6 +118,7 @@ fun PersonScreen(state: AppState, route: Route.Person) {
         modifier = Modifier.fillMaxSize(),
         emptyText = "Других фильмов с этим актёром в кинотеатре нет",
         onItemClick = { state.navigate(Route.Detail(it.id)) },
+        headerFocus = model.photoFocus,
         header = {
             item(span = { GridItemSpan(maxLineSpan) }, key = "person") {
                 Column(Modifier.padding(top = 8.dp, bottom = 8.dp)) {
@@ -132,21 +137,21 @@ fun PersonScreen(state: AppState, route: Route.Person) {
                         }
                     }
                     Row {
-                        // Фото 2:3 целиком, без обрезки
+                        // Фото: рамка подстраивается под пропорции снимка (без серых полос).
+                        // Фото можно выбрать пультом — так со списка фильмов всегда можно подняться наверх.
+                        val photoFv = rememberFocusVisual()
                         Box(
-                            Modifier.width(if (ui.isPhone) 130.dp else 220.dp).aspectRatio(AA.PORTRAIT_RATIO)
-                                .clip(RoundedCornerShape(16.dp)).background(Color(0xFF3A3A3A))
-                                .border(1.5.dp, AA.BorderDark, RoundedCornerShape(16.dp)),
-                            contentAlignment = Alignment.Center,
+                            Modifier.width(if (ui.isPhone) 130.dp else 220.dp)
+                                .focusRequester(model.photoFocus)
+                                .focusable(interactionSource = photoFv.interaction)
                         ) {
-                            val initials = route.name.split(" ").filter { it.isNotBlank() }.take(2)
-                                .joinToString("") { it.take(1).uppercase() }
-                            Text(initials, color = Color(0xFFE0E0E0), fontSize = 34.sp, fontWeight = FontWeight.Bold)
-                            AsyncImage(
-                                model = "${api.baseUrl}/Items/${route.personId}/Images/Primary?maxHeight=900&quality=90",
-                                contentDescription = route.name,
-                                contentScale = ContentScale.Fit,
-                                modifier = Modifier.fillMaxSize(),
+                            AdaptivePhoto(
+                                url = "${api.baseUrl}/Items/${route.personId}/Images/Primary?maxHeight=900&quality=90",
+                                name = route.name,
+                                cornerRadius = 16.dp,
+                                borderWidth = if (photoFv.active) 3.dp else 1.5.dp,
+                                borderColor = if (photoFv.active) AA.Red else AA.BorderDark,
+                                initialsSize = 34.sp,
                             )
                         }
                         Spacer(Modifier.width(if (ui.isPhone) 14.dp else 24.dp))
