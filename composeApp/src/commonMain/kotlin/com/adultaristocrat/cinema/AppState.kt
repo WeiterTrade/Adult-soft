@@ -37,6 +37,30 @@ class AppState(val platform: Platform) {
 
     var loggedIn by mutableStateOf(false)
         private set
+
+    /** Фильмы из сетевых папок (без сервера) */
+    val offline = com.adultaristocrat.cinema.offline.OfflineLibrary(platform, scope)
+
+    /** Офлайн-режим: вход без сервера, только офлайн-библиотека */
+    var offlineMode by mutableStateOf(false)
+        private set
+
+    fun enterOffline() {
+        models.clear()
+        tabRoutes.clear()
+        stack.clear()
+        stack.add(tabRoute(AppTab.HOME))
+        offlineMode = true
+    }
+
+    fun exitOffline() {
+        offline.flush()
+        models.clear()
+        tabRoutes.clear()
+        stack.clear()
+        stack.add(tabRoute(AppTab.HOME))
+        offlineMode = false
+    }
     var userName by mutableStateOf(store.get(K_USER_NAME) ?: "")
         private set
     val lastServer: String get() = if (AppConfig.isServerLocked) AppConfig.SERVER_URL else store.get(K_SERVER) ?: ""
@@ -151,7 +175,8 @@ class AppState(val platform: Platform) {
         continueBusy = true
         scope.launch {
             try {
-                val last = runCatching { api.resume(limit = 1).items.firstOrNull() }.getOrNull()
+                val last = if (offlineMode) offline.lastResumable()
+                else runCatching { api.resume(limit = 1).items.firstOrNull() }.getOrNull() ?: offline.lastResumable()
                 if (last != null) navigate(Route.Player(last.id))
                 else showToast("Нет недосмотренных фильмов")
             } finally {
@@ -163,6 +188,10 @@ class AppState(val platform: Platform) {
     fun openTab(tab: AppTab) {
         if (tab == AppTab.CONTINUE) {
             continueLast()
+            return
+        }
+        if (offlineMode && tab !in setOf(AppTab.HOME, AppTab.SEARCH, AppTab.SETTINGS)) {
+            showToast("В офлайн-режиме доступны: Главная, Поиск, Настройки")
             return
         }
         // Повторное нажатие на «Случайное» — новая подборка
@@ -188,7 +217,7 @@ class AppState(val platform: Platform) {
 
     /** @return false, если дальше назад некуда (можно закрывать приложение) */
     fun back(): Boolean {
-        if (!loggedIn) return false
+        if (!loggedIn && !offlineMode) return false
         if (stack.size > 1) {
             val old = stack.removeAt(stack.lastIndex)
             models.remove(old)

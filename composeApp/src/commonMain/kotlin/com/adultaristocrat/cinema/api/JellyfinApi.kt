@@ -311,6 +311,7 @@ class JellyfinApi(
     // ---------------- Картинки ----------------
 
     fun posterUrl(item: BaseItem, maxHeight: Int = 480): String? = when {
+        item.isOffline -> item.localPoster
         item.isEpisode && item.seriesId != null && item.seriesPrimaryImageTag != null ->
             "$baseUrl/Items/${item.seriesId}/Images/Primary?tag=${item.seriesPrimaryImageTag}&maxHeight=$maxHeight&quality=90"
         item.imageTags["Primary"] != null ->
@@ -319,9 +320,10 @@ class JellyfinApi(
     }
 
     fun primaryUrl(item: BaseItem, maxWidth: Int = 600): String? =
-        item.imageTags["Primary"]?.let { "$baseUrl/Items/${item.id}/Images/Primary?tag=$it&maxWidth=$maxWidth&quality=90" }
+        if (item.isOffline) item.localPoster else item.imageTags["Primary"]?.let { "$baseUrl/Items/${item.id}/Images/Primary?tag=$it&maxWidth=$maxWidth&quality=90" }
 
     fun backdropUrl(item: BaseItem, maxWidth: Int = 1280): String? = when {
+        item.isOffline -> item.localFanart ?: item.localPoster
         item.backdropImageTags.isNotEmpty() ->
             "$baseUrl/Items/${item.id}/Images/Backdrop/0?tag=${item.backdropImageTags[0]}&maxWidth=$maxWidth&quality=85"
         item.parentBackdropItemId != null && item.parentBackdropImageTags.isNotEmpty() ->
@@ -345,7 +347,7 @@ class JellyfinApi(
         }
 
     fun personUrl(p: PersonDto, maxHeight: Int = 300): String? =
-        p.primaryImageTag?.let { "$baseUrl/Items/${p.id}/Images/Primary?tag=$it&maxHeight=$maxHeight&quality=90" }
+        if (p.localThumb != null) p.localThumb else p.primaryImageTag?.let { "$baseUrl/Items/${p.id}/Images/Primary?tag=$it&maxHeight=$maxHeight&quality=90" }
 
     fun userImageUrl(user: UserDto): String? =
         user.primaryImageTag?.let { "$baseUrl/Users/${user.id}/Images/Primary?tag=$it&maxHeight=200" }

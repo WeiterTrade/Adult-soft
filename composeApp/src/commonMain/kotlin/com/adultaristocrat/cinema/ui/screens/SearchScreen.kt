@@ -34,6 +34,7 @@ class SearchModel(state: AppState) {
     val grid = GridModel(state.scope) { start, limit ->
         val q = query.trim()
         if (q.length < 2) ItemsResult(emptyList(), 0)
+        else if (state.offlineMode) state.offline.query(com.adultaristocrat.cinema.api.ItemFilter(), q, start, limit)
         else state.api.items(
             types = AppConfig.CONTENT_TYPES, search = q, sortBy = "SortName", sortOrder = "Ascending",
             startIndex = start, limit = limit,

@@ -38,7 +38,12 @@ kotlin {
             implementation(libs.coil.compose)
             implementation(libs.coil.network.ktor)
         }
+        // Общий JVM-код (офлайн-библиотека SMB) собирается и для Android, и для ПК
+        androidMain { kotlin.srcDir("src/jvmShared/kotlin") }
+        desktopMain.kotlin.srcDir("src/jvmShared/kotlin")
+
         androidMain.dependencies {
+            implementation(libs.jcifs)
             implementation(libs.androidx.activity.compose)
             implementation(libs.kotlinx.coroutines.android)
             implementation(libs.ktor.client.okhttp)
@@ -51,6 +56,7 @@ kotlin {
             implementation(libs.kotlinx.coroutines.swing)
             implementation(libs.ktor.client.okhttp)
             implementation(libs.vlcj)
+            implementation(libs.jcifs)
         }
     }
 }
@@ -105,6 +111,9 @@ android {
                 "/META-INF/INDEX.LIST",
                 "/META-INF/DEPENDENCIES",
                 "/META-INF/io.netty.versions.properties",
+                "/META-INF/versions/9/OSGI-INF/MANIFEST.MF",
+                "/META-INF/BCKEY.DSA", "/META-INF/BCKEY.SF", "/META-INF/BC1024KE.DSA", "/META-INF/BC1024KE.SF",
+                "/META-INF/BC2048KE.DSA", "/META-INF/BC2048KE.SF",
             )
         }
     }

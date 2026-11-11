@@ -15,6 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import java.awt.GraphicsEnvironment
 import java.awt.Desktop
+import androidx.compose.ui.graphics.toComposeImageBitmap
 import javax.sound.sampled.AudioSystem
 import javax.swing.SwingUtilities
 import kotlin.concurrent.thread
@@ -69,6 +70,28 @@ class DesktopPlatform(private val windowState: WindowState) : Platform {
         return AppFonts(body, brand)
     }
 
+    // ---------------- Офлайн-библиотека ----------------
+
+    override val offlineEngine: com.adultaristocrat.cinema.offline.OfflineEngine by lazy {
+        com.adultaristocrat.cinema.offline.JvmOfflineEngine()
+    }
+
+    private val dataDir: java.io.File by lazy {
+        java.io.File(System.getProperty("user.home") ?: ".", ".adult-aristocrat").also { it.mkdirs() }
+    }
+
+    override fun readFile(name: String): String? =
+        runCatching { java.io.File(dataDir, name).takeIf { it.exists() }?.readText() }.getOrNull()
+
+    override fun writeFile(name: String, text: String) {
+        runCatching {
+            val f = java.io.File(dataDir, name)
+            val tmp = java.io.File(dataDir, "$name.tmp")
+            tmp.writeText(text)
+            if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
+        }
+    }
+
     // ---------------- Наушники ----------------
 
     private var hpConnectedState by mutableStateOf(false)
@@ -118,7 +141,18 @@ class DesktopPlatform(private val windowState: WindowState) : Platform {
     }
 
     override fun onHeadphonesClick() {
-        // Открываем системное окно Bluetooth: там включается Bluetooth и подключаются наушники
+        // Linux: повторное нажатие отключает Bluetooth-наушники
+        if (hpConnectedState && !isWindows) {
+            val ok = runCatching {
+                val p = ProcessBuilder("bluetoothctl", "disconnect").redirectErrorStream(true).start()
+                p.waitFor() == 0
+            }.getOrDefault(false)
+            if (ok) {
+                hpConnectedState = false
+                return
+            }
+        }
+        // Открываем системное окно Bluetooth: там подключаются и отключаются наушники
         runCatching {
             if (isWindows) {
                 val v = System.getProperty("os.version") ?: ""
@@ -204,6 +238,19 @@ class DesktopPlatform(private val windowState: WindowState) : Platform {
             placementBeforePlayer = null
         }
     }
+
+    private val logo: androidx.compose.ui.graphics.painter.Painter? by lazy {
+        runCatching {
+            Thread.currentThread().contextClassLoader.getResourceAsStream("app_logo.png")?.use {
+                androidx.compose.ui.graphics.painter.BitmapPainter(
+                    org.jetbrains.skia.Image.makeFromEncoded(it.readBytes()).toComposeImageBitmap()
+                )
+            }
+        }.getOrNull()
+    }
+
+    @Composable
+    override fun logoPainter(): androidx.compose.ui.graphics.painter.Painter? = logo
 
     @Composable
     override fun VideoSurface(

@@ -54,6 +54,8 @@ object AA {
     )
 }
 
+val LocalLogo = staticCompositionLocalOf<androidx.compose.ui.graphics.painter.Painter?> { null }
+
 val LocalFonts = staticCompositionLocalOf { AppFonts(FontFamily.Default, FontFamily.Default) }
 
 @Composable

@@ -88,10 +88,17 @@ class DetailModel(private val state: AppState, private val id: String) {
     var nextUp by mutableStateOf<BaseItem?>(null)
     var shownOnce = false
 
+    private val offline = id.startsWith("off:")
+
     init { load() }
 
     fun load() {
         error = null
+        if (offline) {
+            item = state.offline.find(id)
+            if (item == null) error = "Фильм не найден в офлайн-библиотеке. Пересканируйте папки."
+            return
+        }
         state.scope.launch {
             try {
                 val it = api.item(id)
@@ -110,6 +117,10 @@ class DetailModel(private val state: AppState, private val id: String) {
 
     /** Обновить состояние (прогресс просмотра) после возвращения из плеера */
     fun refresh() {
+        if (offline) {
+            state.offline.find(id)?.let { item = it }
+            return
+        }
         state.scope.launch {
             runCatching { api.item(id) }.onSuccess { item = it }
             val s = item
@@ -132,6 +143,7 @@ class DetailModel(private val state: AppState, private val id: String) {
         val it = item ?: return
         val fav = !(it.userData?.isFavorite ?: false)
         item = it.copy(userData = (it.userData ?: com.adultaristocrat.cinema.api.UserData()).copy(isFavorite = fav))
+        if (offline) return
         state.scope.launch { runCatching { api.setFavorite(it.id, fav) } }
     }
 
@@ -139,6 +151,10 @@ class DetailModel(private val state: AppState, private val id: String) {
         val it = item ?: return
         val played = !(it.userData?.played ?: false)
         item = it.copy(userData = (it.userData ?: com.adultaristocrat.cinema.api.UserData()).copy(played = played))
+        if (offline) {
+            if (played) state.offline.markWatched(it.id) else state.offline.savePosition(it.id, 0, 0)
+            return
+        }
         state.scope.launch { runCatching { api.setPlayed(it.id, played) }; refresh() }
     }
 
@@ -236,10 +252,13 @@ private fun DetailContent(state: AppState, model: DetailModel, item: BaseItem) {
                         }
                     }
                 }
-                Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(top = 8.dp, bottom = 32.dp)) {
+                Column(Modifier.weight(1f).fillMaxHeight().padding(top = 8.dp)) {
+                    // Название по-русски всегда видно сверху (не уезжает при прокрутке)
                     TitleBlock(item)
                     Spacer(Modifier.height(12.dp))
-                    InfoBody(state, model, item, playFocus)
+                    Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 32.dp)) {
+                        InfoBody(state, model, item, playFocus)
+                    }
                 }
             }
         }
@@ -279,8 +298,6 @@ private fun TitleBlock(item: BaseItem) {
     Text(title ?: "", style = MaterialTheme.typography.headlineMedium, color = AA.Text)
     if (item.isEpisode) {
         Text("${item.episodeLabel ?: ""}  ${item.name ?: ""}", style = MaterialTheme.typography.titleMedium, color = AA.TextDim)
-    } else if (!item.originalTitle.isNullOrBlank() && item.originalTitle != item.name) {
-        Text(item.originalTitle, style = MaterialTheme.typography.titleMedium, color = AA.TextDim)
     }
     val ratings = buildList {
         item.communityRating?.takeIf { it > 0 }?.let { add("IMDb" to formatRating(it)) }
@@ -380,7 +397,10 @@ private fun InfoBody(state: AppState, model: DetailModel, item: BaseItem, playFo
         Spacer(Modifier.height(14.dp))
         Text("Описание", style = MaterialTheme.typography.titleLarge, color = AA.Text)
         Spacer(Modifier.height(6.dp))
-        item.taglines.firstOrNull()?.let {
+        // Оригинальное название (или слоган) — перед описанием
+        val sub = item.taglines.firstOrNull()?.takeIf { it.isNotBlank() }
+            ?: item.originalTitle?.takeIf { it.isNotBlank() && it != item.name }
+        sub?.let {
             Text(it, style = MaterialTheme.typography.bodyLarge, color = AA.Text, fontWeight = FontWeight.Bold)
         }
         Text(
@@ -425,8 +445,11 @@ private fun InfoBody(state: AppState, model: DetailModel, item: BaseItem, playFo
     // Актёры и режиссёры — прямоугольные портреты 2:3 (как 1000×1500 у Kodi)
     val actors = item.people.filter { it.type == "Actor" || it.type == "GuestStar" }.take(30)
     val directors = item.people.filter { it.type == "Director" }.take(10)
-    PeopleRow("В ролях", actors, api, ui.isPhone) { state.navigate(Route.Person(it.id, it.name ?: "")) }
-    PeopleRow("Режиссёры", directors, api, ui.isPhone) { state.navigate(Route.Person(it.id, it.name ?: "")) }
+    val openPerson: (com.adultaristocrat.cinema.api.PersonDto) -> Unit = { p ->
+        if (!p.id.startsWith("offp:")) state.navigate(Route.Person(p.id, p.name ?: ""))
+    }
+    PeopleRow("В ролях", actors, api, ui.isPhone, openPerson)
+    PeopleRow("Режиссёры", directors, api, ui.isPhone, openPerson)
 }
 
 @Composable

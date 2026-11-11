@@ -251,8 +251,13 @@ fun PosterCard(
                     Badge(formatRating(it), icon = Icons.Rounded.Star)
                 }
             }
-            // Низ: жанр, тип, год + прогресс
-            CardFooter(item, compact)
+            // Прогресс просмотра — тонкая полоска по нижнему краю, обложку не закрывает
+            val pct = item.userData?.playedPercentage
+            if (pct != null && pct > 0 && pct < 100) {
+                Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(4.dp).background(Color(0x66000000))) {
+                    Box(Modifier.fillMaxWidth((pct / 100.0).toFloat()).height(4.dp).background(AA.Red))
+                }
+            }
             if (item.userData?.played == true && !item.isSeries) {
                 Icon(
                     Icons.Rounded.CheckCircle, "Просмотрено", tint = AA.Green,
@@ -260,6 +265,8 @@ fun PosterCard(
                 )
             }
         }
+        // Страна, год — под обложкой, чтобы постер был виден целиком
+        CardInfo(item, compact)
         Text(
             item.seriesName.takeIf { item.isEpisode } ?: item.name ?: "",
             style = if (compact) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium,
@@ -273,47 +280,31 @@ fun PosterCard(
 }
 
 @Composable
-private fun BoxScope.CardFooter(item: BaseItem, compact: Boolean) {
-    Column(
-        Modifier.align(Alignment.BottomStart).fillMaxWidth().background(AA.cardFooterGradient)
-            .padding(start = 6.dp, end = 6.dp, top = 18.dp, bottom = 5.dp)
+private fun CardInfo(item: BaseItem, compact: Boolean) {
+    // Страна с флагом (если страны нет — жанр)
+    val country = item.productionLocations.firstNotNullOfOrNull { Countries.find(it) }
+    val fallback = item.productionLocations.firstOrNull() ?: item.genres.firstOrNull()
+    Row(
+        Modifier.fillMaxWidth().padding(start = 2.dp, end = 2.dp, top = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Страна с флагом (если страны нет — жанр)
-        val country = item.productionLocations.firstNotNullOfOrNull { Countries.find(it) }
-        val fallback = item.productionLocations.firstOrNull() ?: item.genres.firstOrNull()
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (country != null) {
-                AsyncImage(
-                    model = country.flagUrl,
-                    contentDescription = country.ru,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.size(width = if (compact) 14.dp else 18.dp, height = if (compact) 10.dp else 13.dp)
-                        .clip(RoundedCornerShape(2.dp)),
-                )
-                Spacer(Modifier.width(4.dp))
-            }
-            Text(
-                country?.ru ?: fallback ?: "",
-                fontSize = if (compact) 10.sp else 12.sp, fontWeight = FontWeight.Bold, color = AA.Text,
-                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+        if (country != null) {
+            AsyncImage(
+                model = country.flagUrl,
+                contentDescription = country.ru,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.size(width = if (compact) 14.dp else 18.dp, height = if (compact) 10.dp else 13.dp)
+                    .clip(RoundedCornerShape(2.dp)),
             )
-            if (!compact) {
-                Icon(
-                    if (item.isSeries || item.isEpisode) Icons.Rounded.Tv else Icons.Rounded.Movie, null,
-                    tint = if (item.isSeries || item.isEpisode) Color(0xFF4FC3F7) else AA.Green,
-                    modifier = Modifier.size(14.dp),
-                )
-            }
+            Spacer(Modifier.width(4.dp))
         }
+        Text(
+            country?.ru ?: fallback ?: "",
+            fontSize = if (compact) 10.sp else 12.sp, fontWeight = FontWeight.Bold, color = AA.TextDim,
+            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+        )
         item.yearLabel?.let {
-            Text(it, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = AA.Text, maxLines = 1)
-        }
-        val pct = item.userData?.playedPercentage
-        if (pct != null && pct > 0 && pct < 100) {
-            Spacer(Modifier.height(3.dp))
-            Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color(0x40B40000))) {
-                Box(Modifier.fillMaxWidth((pct / 100.0).toFloat()).height(4.dp).background(AA.Red))
-            }
+            Text(it, fontSize = if (compact) 10.sp else 12.sp, fontWeight = FontWeight.Bold, color = AA.TextDim, maxLines = 1)
         }
     }
 }
@@ -380,6 +371,16 @@ fun MessageBox(text: String, modifier: Modifier = Modifier, actionText: String? 
 
 @Composable
 fun Logo(size: Dp, modifier: Modifier = Modifier) {
+    val painter = LocalLogo.current
+    if (painter != null) {
+        androidx.compose.foundation.Image(
+            painter = painter,
+            contentDescription = com.adultaristocrat.cinema.AppConfig.APP_NAME,
+            contentScale = ContentScale.Fit,
+            modifier = modifier.size(size),
+        )
+        return
+    }
     Box(modifier.size(size).clip(RoundedCornerShape(size / 5)).background(AA.Black), contentAlignment = Alignment.Center) {
         Text("AA", style = brandStyle((size.value / 2.6f).toInt()))
         AsyncImage(

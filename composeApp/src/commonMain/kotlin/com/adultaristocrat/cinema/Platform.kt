@@ -71,6 +71,17 @@ interface Platform {
     /** Полноэкранный режим для плеера */
     fun setPlayerMode(enabled: Boolean)
 
+    /** Логотип кинотеатра (встроен в приложение) */
+    @Composable
+    fun logoPainter(): androidx.compose.ui.graphics.painter.Painter? = null
+
+    /** Офлайн-библиотека в сетевых папках (SMB) */
+    val offlineEngine: com.adultaristocrat.cinema.offline.OfflineEngine? get() = null
+
+    /** Файлы в личной папке приложения (офлайн-библиотека и т.п.) */
+    fun readFile(name: String): String? = null
+    fun writeFile(name: String, text: String) {}
+
     /** Подключены ли наушники (Bluetooth или проводные). Меняется само — это состояние Compose. */
     val headphonesConnected: Boolean get() = false
     val headphonesName: String? get() = null

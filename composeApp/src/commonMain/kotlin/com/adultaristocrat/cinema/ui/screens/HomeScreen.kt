@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.FilterList
+import androidx.compose.material.icons.rounded.FolderShared
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,13 +41,15 @@ sealed class HomeMode {
     data object All : HomeMode()
     data object Latest : HomeMode()
     data class Library(val id: String) : HomeMode()
+    /** Фильмы из сетевых папок */
+    data object Offline : HomeMode()
 }
 
 class HomeModel(private val state: AppState) {
     private val api = state.api
     var views by mutableStateOf<List<BaseItem>>(emptyList())
     var collections by mutableStateOf<List<BaseItem>>(emptyList())
-    var mode by mutableStateOf<HomeMode>(HomeMode.Latest)
+    var mode by mutableStateOf<HomeMode>(if (state.offlineMode) HomeMode.Offline else HomeMode.Latest)
     var filter by mutableStateOf(ItemFilter())
     var genres by mutableStateOf<List<String>?>(null)
     var showFilter by mutableStateOf(false)
@@ -67,10 +70,15 @@ class HomeModel(private val state: AppState) {
                 parentId = m.id, types = types, sortBy = "DateCreated,SortName", sortOrder = "Descending",
                 genres = f.genres, years = f.years, startIndex = start, limit = limit,
             )
+            HomeMode.Offline -> state.offline.query(f, null, start, limit)
         }
     }
 
     init {
+        if (!state.offlineMode) loadServerData()
+    }
+
+    private fun loadServerData() {
         state.scope.launch { runCatching { api.views() }.onSuccess { views = it } }
         state.scope.launch {
             runCatching { api.items(types = "BoxSet", sortBy = "DateCreated", sortOrder = "Descending", limit = 20) }
@@ -86,7 +94,11 @@ class HomeModel(private val state: AppState) {
 
     fun openFilter() {
         showFilter = true
-        if (genres == null) state.scope.launch { genres = runCatching { api.genres() }.getOrDefault(emptyList()) }
+        if (genres == null) state.scope.launch {
+            val server = if (state.offlineMode) emptyList() else runCatching { api.genres() }.getOrDefault(emptyList())
+            val local = if (state.offline.hasMovies) state.offline.items().flatMap { it.genres } else emptyList()
+            genres = (server + local).distinct().sorted()
+        }
     }
 
     fun applyFilter(f: ItemFilter) {
@@ -117,10 +129,20 @@ fun HomeScreen(state: AppState, route: Route.Tab) {
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
                     ) {
-                        item { AAChip("Новые", model.mode == HomeMode.Latest, { model.select(HomeMode.Latest) }) }
-                        item { AAChip("Все", model.mode == HomeMode.All, { model.select(HomeMode.All) }) }
-                        items(model.views, key = { it.id }) { v ->
-                            AAChip(v.name ?: "", model.mode == HomeMode.Library(v.id), { model.select(HomeMode.Library(v.id)) })
+                        if (!state.offlineMode) {
+                            item { AAChip("Новые", model.mode == HomeMode.Latest, { model.select(HomeMode.Latest) }) }
+                            item { AAChip("Все", model.mode == HomeMode.All, { model.select(HomeMode.All) }) }
+                            items(model.views, key = { it.id }) { v ->
+                                AAChip(v.name ?: "", model.mode == HomeMode.Library(v.id), { model.select(HomeMode.Library(v.id)) })
+                            }
+                        }
+                        if (state.offline.hasMovies) {
+                            item {
+                                AAChip(
+                                    "Офлайн", model.mode == HomeMode.Offline, { model.select(HomeMode.Offline) },
+                                    icon = androidx.compose.material.icons.Icons.Rounded.FolderShared,
+                                )
+                            }
                         }
                     }
                     Spacer(Modifier.width(8.dp))
@@ -155,6 +177,7 @@ fun HomeScreen(state: AppState, route: Route.Tab) {
                     HomeMode.Latest -> "Новые поступления"
                     HomeMode.All -> "Все фильмы"
                     is HomeMode.Library -> model.views.firstOrNull { it.id == m.id }?.name ?: "Библиотека"
+                    HomeMode.Offline -> "Офлайн-библиотека"
                 }
                 SectionTitle(title)
             }

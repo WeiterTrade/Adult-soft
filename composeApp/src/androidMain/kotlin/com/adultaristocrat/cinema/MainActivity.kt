@@ -14,6 +14,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val platform = AndroidPlatform(this)
+        if (platform.isTv) {
+            // На ТВ окно не должно «съезжать» вслед за фокусом при листании списка
+            window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
+        }
         appState = AppState(platform)
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {

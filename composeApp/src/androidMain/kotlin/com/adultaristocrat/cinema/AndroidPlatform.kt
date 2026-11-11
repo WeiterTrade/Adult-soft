@@ -91,12 +91,31 @@ class AndroidPlatform(private val activity: Activity) : Platform {
         return AppFonts(body, brand)
     }
 
+    // ---------------- Офлайн-библиотека ----------------
+
+    override val offlineEngine: com.adultaristocrat.cinema.offline.OfflineEngine by lazy {
+        com.adultaristocrat.cinema.offline.JvmOfflineEngine()
+    }
+
+    override fun readFile(name: String): String? =
+        runCatching { java.io.File(activity.filesDir, name).takeIf { it.exists() }?.readText() }.getOrNull()
+
+    override fun writeFile(name: String, text: String) {
+        runCatching {
+            val f = java.io.File(activity.filesDir, name)
+            val tmp = java.io.File(activity.filesDir, "$name.tmp")
+            tmp.writeText(text)
+            if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
+        }
+    }
+
     // ---------------- Наушники ----------------
 
     private val audio = activity.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     private val mainHandler = Handler(Looper.getMainLooper())
     private var hpConnectedState by mutableStateOf(false)
     private var hpNameState by mutableStateOf<String?>(null)
+    private var hpIsBluetooth = false
 
     override val headphonesConnected: Boolean get() = hpConnectedState
     override val headphonesName: String? get() = hpNameState
@@ -114,6 +133,9 @@ class AndroidPlatform(private val activity: Activity) : Platform {
             )
             val dev = audio.getDevices(AudioManager.GET_DEVICES_OUTPUTS).firstOrNull { it.type in types }
             hpConnectedState = dev != null
+            hpIsBluetooth = dev != null && dev.type in setOf(
+                AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, AudioDeviceInfo.TYPE_BLUETOOTH_SCO, 26, 27,
+            )
             hpNameState = dev?.productName?.toString()?.takeIf { it.isNotBlank() }
         } else {
             @Suppress("DEPRECATION")
@@ -148,7 +170,17 @@ class AndroidPlatform(private val activity: Activity) : Platform {
     override fun onHeadphonesClick() {
         refreshHeadphones()
         if (hpConnectedState) {
-            toast("Наушники подключены" + (hpNameState?.let { ": $it" } ?: ""))
+            if (!hpIsBluetooth) {
+                toast("Подключены проводные наушники — отключите штекер")
+                return
+            }
+            // Повторное нажатие — отключить наушники (выключаем Bluetooth с подтверждением системы)
+            try {
+                activity.startActivity(Intent("android.bluetooth.adapter.action.REQUEST_DISABLE"))
+            } catch (e: Exception) {
+                toast("Отключите наушники в настройках Bluetooth")
+                openBluetoothSettings()
+            }
             return
         }
         val adapter = (activity.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
@@ -215,6 +247,10 @@ class AndroidPlatform(private val activity: Activity) : Platform {
             if (!isTv) activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         }
     }
+
+    @Composable
+    override fun logoPainter(): androidx.compose.ui.graphics.painter.Painter =
+        androidx.compose.ui.res.painterResource(R.drawable.app_logo)
 
     @Composable
     override fun VideoSurface(

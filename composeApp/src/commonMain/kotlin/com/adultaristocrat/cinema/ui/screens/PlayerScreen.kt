@@ -42,10 +42,31 @@ class PlayerModel(private val state: AppState, private val route: Route.Player) 
     private var ticksSinceReport = 0
     private var stopped = false
     private var attempt = 0
+    private val offline = route.itemId.startsWith("off:")
+    private var lastDurMs = 0L
 
     init { start() }
 
+    /** Офлайн-фильм: играем файл из сетевой папки через локальный сервер */
+    private fun startOffline() {
+        val it = state.offline.find(route.itemId)
+        val url = it?.localVideo
+        if (it == null || url == null) {
+            error = "Файл не найден в офлайн-библиотеке"
+            return
+        }
+        item = it
+        mode = Mode.DIRECT
+        val startMs = route.startMs ?: if (route.fromStart) 0L else state.offline.positionOf(it.id)
+        lastPosMs = startMs
+        request = PlaybackRequest(
+            url = url, startPositionMs = startMs, title = it.name ?: "", key = "${it.id}-${attempt++}",
+            chapters = api.chaptersOf(it), // сцены прочитаны из MKV при сканировании
+        )
+    }
+
     private fun start() {
+        if (offline) return startOffline()
         state.scope.launch {
             try {
                 val it = api.item(route.itemId)
@@ -105,6 +126,11 @@ class PlayerModel(private val state: AppState, private val route: Route.Player) 
 
     override fun onProgress(positionMs: Long, durationMs: Long, isPaused: Boolean) {
         lastPosMs = positionMs
+        lastDurMs = durationMs
+        if (offline) {
+            state.offline.savePosition(route.itemId, positionMs, durationMs)
+            return
+        }
         val pauseChanged = isPaused != lastPaused
         lastPaused = isPaused
         ticksSinceReport++
@@ -117,6 +143,12 @@ class PlayerModel(private val state: AppState, private val route: Route.Player) 
 
     override fun onEnded() {
         val it = item
+        if (offline) {
+            state.offline.markWatched(route.itemId)
+            stopped = true
+            state.back()
+            return
+        }
         stop()
         if (it != null && it.isEpisode && state.autoNextEpisode) {
             state.scope.launch {
@@ -136,7 +168,7 @@ class PlayerModel(private val state: AppState, private val route: Route.Player) 
             Mode.REMUX -> Mode.TRANSCODE   // затем полное перекодирование
             Mode.TRANSCODE -> null
         }
-        if (r != null && next != null && !state.platform.isDesktop) {
+        if (r != null && next != null && !state.platform.isDesktop && !offline) {
             switchMode(next)
         } else {
             error = "Ошибка воспроизведения: $message"
@@ -144,6 +176,7 @@ class PlayerModel(private val state: AppState, private val route: Route.Player) 
     }
 
     override fun onUnseekable() {
+        if (offline) return // без сервера переупаковать нельзя
         if (mode == Mode.DIRECT && !state.platform.isDesktop) switchMode(Mode.REMUX)
     }
 
@@ -160,6 +193,11 @@ class PlayerModel(private val state: AppState, private val route: Route.Player) 
     fun stop() {
         if (stopped || item == null) return
         stopped = true
+        if (offline) {
+            state.offline.savePosition(route.itemId, lastPosMs, lastDurMs)
+            state.offline.flush()
+            return
+        }
         val r = report()
         state.scope.launch { api.reportStopped(r) }
     }

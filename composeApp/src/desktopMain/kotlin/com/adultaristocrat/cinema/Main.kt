@@ -161,12 +161,17 @@ private fun FrameWindowScope.TitleBar(platform: DesktopPlatform, hasIcon: Boolea
                 Modifier.fillMaxSize().padding(start = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(
-                    Modifier.size(22.dp).clip(RoundedCornerShape(5.dp)).background(Color.Black)
-                        .border(1.dp, AA.Border, RoundedCornerShape(5.dp)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("AA", color = AA.RedBright, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                val logo = platform.logoPainter()
+                if (logo != null) {
+                    androidx.compose.foundation.Image(logo, null, modifier = Modifier.size(30.dp))
+                } else {
+                    Box(
+                        Modifier.size(22.dp).clip(RoundedCornerShape(5.dp)).background(Color.Black)
+                            .border(1.dp, AA.Border, RoundedCornerShape(5.dp)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text("AA", color = AA.RedBright, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
                 Spacer(Modifier.width(10.dp))
                 Text(

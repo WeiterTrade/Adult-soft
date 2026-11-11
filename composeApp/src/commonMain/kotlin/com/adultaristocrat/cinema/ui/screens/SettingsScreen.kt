@@ -65,12 +65,19 @@ fun SettingsScreen(state: AppState) {
                 Text("Версия ${AppConfig.VERSION}", color = AA.TextDim)
             }
         }
-        SectionTitle("Аккаунт")
-        InfoRow("Пользователь", state.userName)
-        InfoRow("Устройство", state.platform.deviceName)
+        if (!state.offlineMode) {
+            SectionTitle("Аккаунт")
+            InfoRow("Пользователь", state.userName)
+            InfoRow("Устройство", state.platform.deviceName)
 
-        SectionTitle("Быстрое подключение")
-        QuickConnectAuthorize(state)
+            SectionTitle("Быстрое подключение")
+            QuickConnectAuthorize(state)
+        }
+
+        if (state.offline.supported) {
+            SectionTitle("Библиотека")
+            OfflineSettings(state)
+        }
 
         SectionTitle("Воспроизведение")
         ToggleRow(
@@ -92,7 +99,11 @@ fun SettingsScreen(state: AppState) {
         ) { state.updateAutoNext(it) }
 
         Spacer(Modifier.height(8.dp))
-        AAButton("Выйти из аккаунта", Icons.Rounded.Logout, { state.logout() }, primary = false)
+        if (state.offlineMode) {
+            AAButton("Выйти из офлайн-режима", Icons.Rounded.Logout, { state.exitOffline() }, primary = false)
+        } else {
+            AAButton("Выйти из аккаунта", Icons.Rounded.Logout, { state.logout() }, primary = false)
+        }
     }
 }
 

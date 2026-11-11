@@ -89,8 +89,8 @@ fun App(state: AppState) {
                 wideMin = if (isPhone) 260.dp else 300.dp,
                 hPad = if (isPhone) 8.dp else 16.dp,
             )
-            CompositionLocalProvider(LocalUi provides metrics) {
-                if (!state.loggedIn) {
+            CompositionLocalProvider(LocalUi provides metrics, LocalLogo provides platform.logoPainter()) {
+                if (!state.loggedIn && !state.offlineMode) {
                     LoginScreen(state)
                 } else {
                     Shell(state)
@@ -161,22 +161,28 @@ private fun RouteContent(state: AppState, route: Route) {
 
 @Composable
 private fun NavRail(current: AppTab, platform: com.adultaristocrat.cinema.Platform, onSelect: (AppTab) -> Unit) {
-    Column(
+    // Панель не прокручивается: размер кнопок подбирается под высоту экрана
+    BoxWithConstraints(
         Modifier
             .fillMaxHeight()
             .width(76.dp)
             .background(Color(0xF0000000))
-            .border(1.dp, AA.BorderDark)
-            .verticalScroll(rememberScrollState())
-            .padding(vertical = 10.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+            .border(1.dp, AA.BorderDark),
     ) {
-        Logo(44.dp)
-        Spacer(Modifier.height(6.dp))
-        HeadphonesButton(platform, 56.dp)
-        AppTab.entries.forEach { tab ->
-            NavButton(tab, tab == current, 56.dp) { onSelect(tab) }
+        val count = AppTab.entries.size + 1 // + наушники
+        val logo = 44.dp
+        val free = maxHeight - logo - 28.dp
+        val btn = (free / count - 4.dp).coerceIn(34.dp, 56.dp)
+        Column(
+            Modifier.fillMaxSize().padding(vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceEvenly,
+        ) {
+            Logo(logo)
+            HeadphonesButton(platform, btn)
+            AppTab.entries.forEach { tab ->
+                NavButton(tab, tab == current, btn) { onSelect(tab) }
+            }
         }
     }
 }

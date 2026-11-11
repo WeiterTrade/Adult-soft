@@ -55,6 +55,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.QrCode2
+import androidx.compose.material.icons.rounded.FolderShared
 
 @Composable
 fun aaFieldColors(): TextFieldColors = OutlinedTextFieldDefaults.colors(
@@ -161,8 +162,12 @@ fun LoginScreen(state: AppState) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Logo(110.dp)
-            Text(AppConfig.APP_NAME.uppercase(), style = brandStyle(26), textAlign = TextAlign.Center)
+            if (com.adultaristocrat.cinema.ui.LocalLogo.current != null) {
+                Logo(190.dp)
+            } else {
+                Logo(110.dp)
+                Text(AppConfig.APP_NAME.uppercase(), style = brandStyle(26), textAlign = TextAlign.Center)
+            }
             Spacer(Modifier.height(4.dp))
             if (!AppConfig.isServerLocked) OutlinedTextField(
                 value = server, onValueChange = { server = it },
@@ -219,6 +224,12 @@ fun LoginScreen(state: AppState) {
                         if (qcJob != null) "Подключение…" else "Быстрое подключение", Icons.Rounded.QrCode2,
                         { startQuickConnect() }, Modifier.fillMaxWidth(), primary = false,
                     )
+                    if (state.offline.enabled) {
+                        AAButton(
+                            "Офлайн-библиотека (${state.offline.state.movies.size})", Icons.Rounded.FolderShared,
+                            { state.enterOffline() }, Modifier.fillMaxWidth(), primary = false,
+                        )
+                    }
                 }
             }
         }

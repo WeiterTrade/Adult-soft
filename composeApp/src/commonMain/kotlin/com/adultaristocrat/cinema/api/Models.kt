@@ -27,6 +27,8 @@ data class UserDto(
     @SerialName("Id") val id: String,
     @SerialName("Name") val name: String? = null,
     @SerialName("PrimaryImageTag") val primaryImageTag: String? = null,
+    /** Офлайн-библиотека: адрес фото из папки .actors */
+    @kotlinx.serialization.Transient val localThumb: String? = null,
 )
 
 @Serializable
@@ -58,6 +60,8 @@ data class PersonDto(
     @SerialName("Role") val role: String? = null,
     @SerialName("Type") val type: String? = null,
     @SerialName("PrimaryImageTag") val primaryImageTag: String? = null,
+    /** Офлайн-библиотека: адрес фото из папки .actors */
+    @kotlinx.serialization.Transient val localThumb: String? = null,
 )
 
 @Serializable
@@ -110,7 +114,13 @@ data class BaseItem(
     @SerialName("ProviderIds") val providerIds: Map<String, String> = emptyMap(),
     @SerialName("MediaSources") val mediaSources: List<MediaSource> = emptyList(),
     @SerialName("Chapters") val chapters: List<ChapterDto> = emptyList(),
+    /** Офлайн-библиотека: адреса постера, фанарта и видео через локальный сервер */
+    @kotlinx.serialization.Transient val localPoster: String? = null,
+    @kotlinx.serialization.Transient val localFanart: String? = null,
+    @kotlinx.serialization.Transient val localVideo: String? = null,
 ) {
+    val isOffline: Boolean get() = id.startsWith("off:")
+
     val isSeries get() = type == "Series"
     val isEpisode get() = type == "Episode"
     val isMovie get() = type == "Movie"
