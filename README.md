@@ -56,14 +56,16 @@ git tag v1.0.1 && git push origin v1.0.1
 *Send Files to TV*. Можно и через ADB: `adb install AdultAristocrat-android.apk`.
 Иконка появится в списке приложений ТВ.
 
-**Windows 10/11:** запустите `.msi`. Устанавливать VLC отдельно не нужно.
+**Windows 10/11:** запустите `AdultAristocrat-…-win10-11-setup.exe` — установщик спросит язык (русский / English). VLC устанавливать не нужно.
+
+**Windows 7 (установщик):** `AdultAristocrat-…-win7-setup.exe`. Есть и портативная версия в zip.
 
 **Windows 7:** распакуйте zip в любую папку (например, `C:\AdultAristocrat`) и запустите `Start.bat`.
 - Нужна 64-битная Windows 7 SP1 со всеми обновлениями.
 - Чёрное окно или ошибка графики — запустите `Start-software.bat`.
 - Программа не запускается — запустите `Debug.bat` и пришлите текст из окна.
 
-**Linux:** `sudo apt install vlc`, затем `sudo dpkg -i adult-aristocrat_*.deb`.
+**Linux:** `sudo apt install vlc`, затем `sudo dpkg -i adult-aristocrat_*.deb` (Ubuntu/Debian/Mint) или `sudo dnf install vlc ./adult-aristocrat-*.rpm` (Fedora/openSUSE).
 Вместо этого можно распаковать `tar.gz` и запустить `bin/AdultAristocrat`.
 
 ## Что умеет версия 1.0

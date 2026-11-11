@@ -242,8 +242,8 @@ class AppState(val platform: Platform) {
             continueLast()
             return
         }
-        if (offlineMode && tab !in setOf(AppTab.HOME, AppTab.SEARCH, AppTab.SETTINGS)) {
-            showToast("В офлайн-режиме доступны: Главная, Поиск, Настройки")
+        if (offlineMode && tab !in setOf(AppTab.HOME, AppTab.SEARCH, AppTab.HISTORY, AppTab.SETTINGS)) {
+            showToast("В офлайн-режиме доступны: Главная, Поиск, История, Настройки")
             return
         }
         // Повторное нажатие на «Случайное» — новая подборка

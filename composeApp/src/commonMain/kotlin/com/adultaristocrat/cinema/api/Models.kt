@@ -51,6 +51,8 @@ data class UserData(
     @SerialName("Played") val played: Boolean = false,
     @SerialName("IsFavorite") val isFavorite: Boolean = false,
     @SerialName("UnplayedItemCount") val unplayedItemCount: Int? = null,
+    /** Когда смотрели последний раз (ISO-дата) — для истории */
+    @SerialName("LastPlayedDate") val lastPlayedDate: String? = null,
 )
 
 @Serializable

@@ -125,7 +125,7 @@ compose.desktop {
         jvmArgs += listOf("-Dfile.encoding=UTF-8", "-Xmx1024m")
 
         nativeDistributions {
-            targetFormats(TargetFormat.Msi, TargetFormat.Exe, TargetFormat.Deb)
+            targetFormats(TargetFormat.Msi, TargetFormat.Exe, TargetFormat.Deb, TargetFormat.Rpm)
             packageName = "AdultAristocrat"
             packageVersion = appVersion
             description = "Adult Aristocrat — домашний кинотеатр"

@@ -62,10 +62,25 @@ class BrowseModel(state: AppState, val tab: AppTab?, val folder: Route.Folder?) 
                 if (start > 0) ItemsResult(emptyList(), 0)
                 else api.items(types = AppConfig.CONTENT_TYPES, sortBy = "Random", limit = 60).let { ItemsResult(it.items, it.items.size) }
             }
-            tab == AppTab.HISTORY -> api.items(
-                types = AppConfig.PLAYABLE_TYPES, filters = "IsPlayed", sortBy = "DatePlayed", sortOrder = "Descending",
-                startIndex = start, limit = limit,
-            )
+            // История: и досмотренные, и начатые фильмы — новые сверху
+            tab == AppTab.HISTORY -> {
+                if (start > 0) ItemsResult(emptyList(), 0)
+                else if (state.offlineMode) {
+                    val ids = state.offline.state.positions.keys
+                    val list = state.offline.items().filter { it.id in ids }
+                    ItemsResult(list, list.size)
+                } else {
+                    val played = runCatching {
+                        api.items(types = AppConfig.PLAYABLE_TYPES, filters = "IsPlayed", sortBy = "DatePlayed", sortOrder = "Descending", limit = 200).items
+                    }.getOrDefault(emptyList())
+                    val started = runCatching {
+                        api.items(types = AppConfig.PLAYABLE_TYPES, filters = "IsResumable", sortBy = "DatePlayed", sortOrder = "Descending", limit = 200).items
+                    }.getOrDefault(emptyList())
+                    val all = (played + started).distinctBy { it.id }
+                        .sortedByDescending { it.userData?.lastPlayedDate ?: "" }
+                    ItemsResult(all, all.size)
+                }
+            }
             tab == AppTab.FAVORITES -> api.items(
                 types = AppConfig.CONTENT_TYPES, filters = "IsFavorite", sortBy = "SortName", sortOrder = "Ascending",
                 startIndex = start, limit = limit,
