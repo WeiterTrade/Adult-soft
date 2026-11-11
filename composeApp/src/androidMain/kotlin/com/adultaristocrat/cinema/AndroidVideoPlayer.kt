@@ -7,6 +7,9 @@ import androidx.annotation.OptIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
@@ -27,7 +30,12 @@ import java.util.Locale
 
 /** Управление ExoPlayer для общего интерфейса плеера */
 @OptIn(UnstableApi::class)
-private class ExoControl(private val player: ExoPlayer) : PlayerControl {
+private class ExoControl(
+    private val player: ExoPlayer,
+    private val onScale: (ScaleMode) -> Unit,
+) : PlayerControl {
+    override fun setScaleMode(mode: ScaleMode) = onScale(mode)
+
     override val positionMs: Long get() = player.currentPosition
     override val durationMs: Long get() = player.duration.takeIf { it != C.TIME_UNSET } ?: 0L
     override val isPlaying: Boolean get() = player.playWhenReady && player.playbackState != Player.STATE_ENDED
@@ -105,6 +113,8 @@ fun AndroidVideoSurface(
 ) {
     val context = LocalContext.current
 
+    var scale by remember { mutableStateOf(ScaleMode.FIT) }
+
     val player = remember(request.key) {
         val renderers = DefaultRenderersFactory(context)
             .setEnableDecoderFallback(true)
@@ -155,7 +165,7 @@ fun AndroidVideoSurface(
             }
         }
         player.addListener(listener)
-        onControl(ExoControl(player))
+        onControl(ExoControl(player) { scale = it })
         onDispose {
             onControl(null)
             player.removeListener(listener)
@@ -175,7 +185,14 @@ fun AndroidVideoSurface(
                 this.player = player
             }
         },
-        update = { view -> if (view.player !== player) view.player = player },
+        update = { view ->
+            if (view.player !== player) view.player = player
+            view.resizeMode = when (scale) {
+                ScaleMode.FIT -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+                ScaleMode.FILL -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                ScaleMode.STRETCH -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+            }
+        },
         modifier = modifier,
     )
 }

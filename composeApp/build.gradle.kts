@@ -126,7 +126,9 @@ compose.desktop {
 
         nativeDistributions {
             targetFormats(TargetFormat.Msi, TargetFormat.Exe, TargetFormat.Deb, TargetFormat.Rpm)
-            packageName = "AdultAristocrat"
+            // В меню Linux название показывается как есть — там нужно с пробелом.
+            // На Windows оставляем без пробела (на это имя завязаны установщики и ярлыки).
+            packageName = if (System.getProperty("os.name").orEmpty().lowercase().contains("linux")) "Adult Aristocrat" else "AdultAristocrat"
             packageVersion = appVersion
             description = "Adult Aristocrat — домашний кинотеатр"
             vendor = "Adult Aristocrat"

@@ -101,7 +101,12 @@ private class FrameSink(private val onFrame: (ImageBitmap) -> Unit) {
 
 
 /** Управление VLC для общего интерфейса плеера */
-private class VlcControl(private val player: EmbeddedMediaPlayer) : PlayerControl {
+private class VlcControl(
+    private val player: EmbeddedMediaPlayer,
+    private val onScale: (ScaleMode) -> Unit,
+) : PlayerControl {
+    override fun setScaleMode(mode: ScaleMode) = onScale(mode)
+
     @Volatile var buffering = true
 
     override val positionMs: Long get() = player.status().time()
@@ -157,6 +162,7 @@ fun VlcVideoSurface(
     }
 
     var frame by remember { mutableStateOf<ImageBitmap?>(null) }
+    var scale by remember { mutableStateOf(ScaleMode.FIT) }
 
     val player: EmbeddedMediaPlayer = remember(request.key) {
         val p = factory.mediaPlayers().newEmbeddedMediaPlayer()
@@ -166,7 +172,7 @@ fun VlcVideoSurface(
     }
 
     DisposableEffect(player) {
-        val control = VlcControl(player)
+        val control = VlcControl(player) { scale = it }
         val listener = object : MediaPlayerEventAdapter() {
             override fun finished(mediaPlayer: MediaPlayer) {
                 SwingUtilities.invokeLater { events.onEnded() }
@@ -205,7 +211,11 @@ fun VlcVideoSurface(
             Image(
                 bitmap = it,
                 contentDescription = null,
-                contentScale = ContentScale.Fit,
+                contentScale = when (scale) {
+                    ScaleMode.FIT -> ContentScale.Fit
+                    ScaleMode.FILL -> ContentScale.Crop
+                    ScaleMode.STRETCH -> ContentScale.FillBounds
+                },
                 modifier = Modifier.fillMaxSize(),
             )
         }

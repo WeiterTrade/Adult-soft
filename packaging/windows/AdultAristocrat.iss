@@ -56,13 +56,18 @@ Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
 Name: "en"; MessagesFile: "compiler:Default.isl"
 
 [CustomMessages]
+ru.StartMenuIcon=Добавить ярлык в меню «Пуск»
+en.StartMenuIcon=Create a Start Menu shortcut
+ru.Shortcuts=Ярлыки:
+en.Shortcuts=Shortcuts:
 ru.LaunchApp=Запустить {#MyAppName}
 en.LaunchApp=Launch {#MyAppName}
 ru.SoftwareShortcut={#MyAppName} (программная отрисовка)
 en.SoftwareShortcut={#MyAppName} (software rendering)
 
 [Tasks]
-Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
+Name: "startmenuicon"; Description: "{cm:StartMenuIcon}"; GroupDescription: "{cm:Shortcuts}"
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:Shortcuts}"
 
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -70,14 +75,14 @@ Source: "setup.ico"; DestDir: "{app}"; DestName: "AdultAristocrat.ico"; Flags: i
 
 [Icons]
 #ifdef Win7
-Name: "{group}\{#MyAppName}"; Filename: "{#Win7Exe}"; Parameters: "{#Win7Args}"; WorkingDir: "{app}"; IconFilename: "{app}\AdultAristocrat.ico"
-Name: "{group}\{cm:SoftwareShortcut}"; Filename: "{#Win7Exe}"; Parameters: "{#Win7ArgsSoft}"; WorkingDir: "{app}"; IconFilename: "{app}\AdultAristocrat.ico"
+Name: "{group}\{#MyAppName}"; Filename: "{#Win7Exe}"; Parameters: "{#Win7Args}"; WorkingDir: "{app}"; IconFilename: "{app}\AdultAristocrat.ico"; Tasks: startmenuicon
+Name: "{group}\{cm:SoftwareShortcut}"; Filename: "{#Win7Exe}"; Parameters: "{#Win7ArgsSoft}"; WorkingDir: "{app}"; IconFilename: "{app}\AdultAristocrat.ico"; Tasks: startmenuicon
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{#Win7Exe}"; Parameters: "{#Win7Args}"; WorkingDir: "{app}"; IconFilename: "{app}\AdultAristocrat.ico"; Tasks: desktopicon
 #else
-Name: "{group}\{#MyAppName}"; Filename: "{app}\AdultAristocrat.exe"; WorkingDir: "{app}"; IconFilename: "{app}\AdultAristocrat.ico"
+Name: "{group}\{#MyAppName}"; Filename: "{app}\AdultAristocrat.exe"; WorkingDir: "{app}"; IconFilename: "{app}\AdultAristocrat.ico"; Tasks: startmenuicon
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\AdultAristocrat.exe"; WorkingDir: "{app}"; IconFilename: "{app}\AdultAristocrat.ico"; Tasks: desktopicon
 #endif
-Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
+Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"; Tasks: startmenuicon
 
 [Run]
 #ifdef Win7

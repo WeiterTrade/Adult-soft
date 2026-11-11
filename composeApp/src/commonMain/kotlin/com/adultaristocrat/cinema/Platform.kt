@@ -49,6 +49,15 @@ interface PlayerControl {
     /** Первый вариант — «Выключены» с id = "off" */
     fun subtitleTracks(): List<TrackOption>
     fun selectSubtitle(id: String)
+    /** Как вписывать картинку в экран */
+    fun setScaleMode(mode: ScaleMode) {}
+}
+
+/** Режимы картинки: как в VLC — вписать, заполнить экран (обрезка краёв), растянуть */
+enum class ScaleMode(val title: String) {
+    FIT("Вписать"),
+    FILL("Заполнить"),
+    STRETCH("Растянуть"),
 }
 
 data class AppFonts(val body: FontFamily, val brand: FontFamily)

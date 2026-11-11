@@ -83,6 +83,8 @@ import com.adultaristocrat.cinema.PlaybackRequest
 import com.adultaristocrat.cinema.PlayerControl
 import com.adultaristocrat.cinema.PlayerEvents
 import com.adultaristocrat.cinema.TrackOption
+import com.adultaristocrat.cinema.ScaleMode
+import androidx.compose.material.icons.rounded.AspectRatio
 import com.adultaristocrat.cinema.ui.screens.formatTime
 import kotlinx.coroutines.delay
 
@@ -112,6 +114,8 @@ fun PlayerOverlay(
     var idleTicks by remember { mutableStateOf(0) }
     var panel by remember { mutableStateOf(Panel.NONE) }
     var backHandled by remember { mutableStateOf(false) }
+    var scaleMode by remember { mutableStateOf(ScaleMode.FIT) }
+    var scaleHint by remember { mutableStateOf<String?>(null) }
 
     val rootFocus = remember { FocusRequester() }
     val barFocus = remember { FocusRequester() }
@@ -131,6 +135,15 @@ fun PlayerOverlay(
 
     fun togglePause() {
         control?.togglePause()
+        activity()
+    }
+
+    /** Вписать → Заполнить → Растянуть */
+    fun cycleScale() {
+        val next = ScaleMode.entries[(scaleMode.ordinal + 1) % ScaleMode.entries.size]
+        scaleMode = next
+        control?.setScaleMode(next)
+        scaleHint = next.title
         activity()
     }
 
@@ -209,6 +222,7 @@ fun PlayerOverlay(
                         if (chapters.isNotEmpty()) { panel = if (panel == Panel.SCENES) Panel.NONE else Panel.SCENES; activity() }
                         true
                     }
+                    Key.ProgramBlue, Key.Z -> { cycleScale(); true }
                     Key.ProgramGreen -> { panel = if (panel == Panel.AUDIO) Panel.NONE else Panel.AUDIO; activity(); true }
                     Key.ProgramYellow, Key.Captions -> { panel = if (panel == Panel.SUBS) Panel.NONE else Panel.SUBS; activity(); true }
                     Key.MediaFastForward -> { seekTo(pos + 30_000); true }
@@ -255,6 +269,18 @@ fun PlayerOverlay(
                     )
                 }
         )
+
+        scaleHint?.let { hint ->
+            LaunchedEffect(hint, scaleMode) {
+                delay(1500)
+                scaleHint = null
+            }
+            Text(
+                hint, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.align(Alignment.Center).clip(RoundedCornerShape(14.dp))
+                    .background(Color(0xCC000000)).padding(horizontal = 22.dp, vertical = 12.dp),
+            )
+        }
 
         if (buffering || control == null) {
             CircularProgressIndicator(color = AA.Red, modifier = Modifier.align(Alignment.Center).size(56.dp))
@@ -341,6 +367,11 @@ fun PlayerOverlay(
                         panel = if (panel == Panel.AUDIO) Panel.NONE else Panel.AUDIO
                         activity()
                     }
+                    CtrlButton(
+                        Icons.Rounded.AspectRatio, "Картинка: ${scaleMode.title}",
+                        label = if (ui.isPhone) null else scaleMode.title,
+                        active = scaleMode != ScaleMode.FIT,
+                    ) { cycleScale() }
                     CtrlButton(Icons.Rounded.Subtitles, "Субтитры", active = panel == Panel.SUBS) {
                         panel = if (panel == Panel.SUBS) Panel.NONE else Panel.SUBS
                         activity()
