@@ -20,6 +20,14 @@ object AppConfig {
     /** Логотип (грузится из сети, если доступен) */
     const val LOGO_URL = "https://cdn.phototourl.com/member/2026-10-10-b3dbbcbd-aca6-4c8d-8305-7210f212a4ac.png"
 
+    /**
+     * Какие типы контента показывать. Сейчас в кинотеатре только фильмы.
+     * Если появятся сериалы — поставьте "Movie,Series" (а для истории/продолжения "Movie,Episode").
+     */
+    const val CONTENT_TYPES = "Movie"
+    const val PLAYABLE_TYPES = "Movie"
+    const val SHOW_SERIES = false
+
     /** Сколько элементов грузить за одну страницу сетки */
     const val PAGE_SIZE = 60
 }

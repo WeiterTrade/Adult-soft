@@ -1,5 +1,6 @@
 package com.adultaristocrat.cinema.ui.screens
 
+import com.adultaristocrat.cinema.AppConfig
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -52,7 +53,7 @@ class HomeModel(private val state: AppState) {
 
     val grid = GridModel(state.scope) { start, limit ->
         val f = filter
-        val types = f.types.takeIf { it.isNotEmpty() }?.joinToString(",") ?: "Movie,Series"
+        val types = f.types.takeIf { it.isNotEmpty() }?.joinToString(",") ?: AppConfig.CONTENT_TYPES
         when (val m = mode) {
             HomeMode.All -> api.items(
                 types = types, sortBy = "ProductionYear,PremiereDate,SortName", sortOrder = "Descending",
@@ -152,7 +153,7 @@ fun HomeScreen(state: AppState, route: Route.Tab) {
             item(span = { GridItemSpan(maxLineSpan) }, key = "title") {
                 val title = when (val m = model.mode) {
                     HomeMode.Latest -> "Новые поступления"
-                    HomeMode.All -> "Все фильмы и сериалы"
+                    HomeMode.All -> "Все фильмы"
                     is HomeMode.Library -> model.views.firstOrNull { it.id == m.id }?.name ?: "Библиотека"
                 }
                 SectionTitle(title)

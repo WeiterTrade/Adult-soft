@@ -119,12 +119,12 @@ class JellyfinApi(
         val uid = userId ?: return emptyList()
         return runCatching { getJson<ItemsResult>("/UserViews", mapOf("userId" to uid)).items }
             .getOrElse { getJson<ItemsResult>("/Users/$uid/Views").items }
-            .filter { it.collectionType == null || it.collectionType in setOf("movies", "tvshows", "boxsets", "mixed", "homevideos") }
+            .filter { it.collectionType == null || it.collectionType in setOf("movies", "mixed", "homevideos") || (AppConfig.SHOW_SERIES && it.collectionType == "tvshows") }
     }
 
     suspend fun items(
         parentId: String? = null,
-        types: String? = "Movie,Series",
+        types: String? = AppConfig.CONTENT_TYPES,
         sortBy: String = "DateCreated,SortName",
         sortOrder: String = "Descending",
         filters: String? = null,
@@ -164,7 +164,7 @@ class JellyfinApi(
             .items.firstOrNull() ?: error("Элемент не найден")
 
     suspend fun resume(limit: Int = AppConfig.PAGE_SIZE, startIndex: Int = 0): ItemsResult = items(
-        types = "Movie,Episode", filters = "IsResumable", sortBy = "DatePlayed", sortOrder = "Descending",
+        types = AppConfig.PLAYABLE_TYPES, filters = "IsResumable", sortBy = "DatePlayed", sortOrder = "Descending",
         limit = limit, startIndex = startIndex,
     )
 
@@ -194,7 +194,7 @@ class JellyfinApi(
     suspend fun genres(): List<String> =
         getJson<ItemsResult>(
             "/Genres",
-            mapOf("userId" to userId, "IncludeItemTypes" to "Movie,Series", "Recursive" to true, "SortBy" to "SortName")
+            mapOf("userId" to userId, "IncludeItemTypes" to AppConfig.CONTENT_TYPES, "Recursive" to true, "SortBy" to "SortName")
         ).items.mapNotNull { it.name }
 
     suspend fun setFavorite(itemId: String, favorite: Boolean) {
@@ -275,6 +275,19 @@ class JellyfinApi(
         else -> primaryUrl(item, maxWidth)
     }
 
+    fun chapterImageUrl(itemId: String, index: Int, tag: String?, maxWidth: Int = 480): String? =
+        tag?.let { "$baseUrl/Items/$itemId/Images/Chapter/$index?tag=$it&maxWidth=$maxWidth&quality=85" }
+
+    /** Сцены фильма (главы MKV), с картинками, если сервер их извлёк */
+    fun chaptersOf(item: BaseItem): List<com.adultaristocrat.cinema.Chapter> =
+        item.chapters.mapIndexed { i, c ->
+            com.adultaristocrat.cinema.Chapter(
+                name = c.name?.takeIf { it.isNotBlank() } ?: "Сцена ${i + 1}",
+                startMs = c.startPositionTicks / TICKS_PER_MS,
+                imageUrl = chapterImageUrl(item.id, i, c.imageTag),
+            )
+        }
+
     fun personUrl(p: PersonDto, maxHeight: Int = 300): String? =
         p.primaryImageTag?.let { "$baseUrl/Items/${p.id}/Images/Primary?tag=$it&maxHeight=$maxHeight&quality=90" }
 
@@ -287,7 +300,7 @@ class JellyfinApi(
     companion object {
         const val CARD_FIELDS = "PrimaryImageAspectRatio,Genres,ProductionLocations,Overview"
         const val DETAIL_FIELDS =
-            "PrimaryImageAspectRatio,Genres,ProductionLocations,Overview,People,Taglines,RemoteTrailers,ProviderIds,OriginalTitle,MediaSources,MediaStreams,ChildCount"
+            "PrimaryImageAspectRatio,Genres,ProductionLocations,Overview,People,Taglines,RemoteTrailers,ProviderIds,OriginalTitle,MediaSources,MediaStreams,ChildCount,Chapters"
 
         const val TICKS_PER_MS = 10_000L
 

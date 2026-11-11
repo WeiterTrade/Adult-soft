@@ -95,7 +95,12 @@ class AndroidPlatform(private val activity: Activity) : Platform {
     }
 
     @Composable
-    override fun VideoPlayer(request: PlaybackRequest, events: PlayerEvents, modifier: Modifier) {
-        AndroidVideoPlayer(request, events, modifier)
+    override fun VideoSurface(
+        request: PlaybackRequest,
+        events: PlayerEvents,
+        onControl: (PlayerControl?) -> Unit,
+        modifier: Modifier,
+    ) {
+        AndroidVideoSurface(request, events, onControl, modifier)
     }
 }

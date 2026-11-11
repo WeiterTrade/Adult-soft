@@ -13,7 +13,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import com.adultaristocrat.cinema.AppState
 import com.adultaristocrat.cinema.PlaybackRequest
+import com.adultaristocrat.cinema.PlayerControl
 import com.adultaristocrat.cinema.PlayerEvents
+import com.adultaristocrat.cinema.ui.PlayerOverlay
+import androidx.compose.runtime.remember
 import com.adultaristocrat.cinema.Route
 import com.adultaristocrat.cinema.api.BaseItem
 import com.adultaristocrat.cinema.api.JellyfinApi
@@ -50,7 +53,8 @@ class PlayerModel(private val state: AppState, private val route: Route.Player) 
                 val source = info.mediaSources.firstOrNull()
                 mediaSourceId = source?.id ?: it.id
                 playSessionId = info.playSessionId
-                val startMs = if (route.fromStart) 0L else (it.userData?.playbackPositionTicks ?: 0L) / JellyfinApi.TICKS_PER_MS
+                val startMs = route.startMs
+                    ?: if (route.fromStart) 0L else (it.userData?.playbackPositionTicks ?: 0L) / JellyfinApi.TICKS_PER_MS
                 lastPosMs = startMs
                 transcoding = state.forceTranscode
                 request = PlaybackRequest(
@@ -58,6 +62,7 @@ class PlayerModel(private val state: AppState, private val route: Route.Player) 
                     startPositionMs = startMs,
                     title = title(it),
                     key = "${it.id}-${attempt++}",
+                    chapters = api.chaptersOf(it),
                 )
                 api.reportStart(report())
             } catch (e: Exception) {
@@ -149,7 +154,9 @@ fun PlayerScreen(state: AppState, route: Route.Player) {
             model.error != null -> MessageBox(model.error ?: "", actionText = "Назад") { state.back() }
             req == null -> LoadingBox()
             else -> key(req.key) {
-                state.platform.VideoPlayer(req, model, Modifier.fillMaxSize())
+                var control by remember { mutableStateOf<PlayerControl?>(null) }
+                state.platform.VideoSurface(req, model, { control = it }, Modifier.fillMaxSize())
+                PlayerOverlay(req, control, model, state.platform)
             }
         }
     }

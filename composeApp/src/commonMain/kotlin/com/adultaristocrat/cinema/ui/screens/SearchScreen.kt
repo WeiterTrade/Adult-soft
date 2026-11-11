@@ -1,5 +1,6 @@
 package com.adultaristocrat.cinema.ui.screens
 
+import com.adultaristocrat.cinema.AppConfig
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -34,7 +35,7 @@ class SearchModel(state: AppState) {
         val q = query.trim()
         if (q.length < 2) ItemsResult(emptyList(), 0)
         else state.api.items(
-            types = "Movie,Series", search = q, sortBy = "SortName", sortOrder = "Ascending",
+            types = AppConfig.CONTENT_TYPES, search = q, sortBy = "SortName", sortOrder = "Ascending",
             startIndex = start, limit = limit,
         )
     }
@@ -57,7 +58,7 @@ fun SearchScreen(state: AppState, route: Route.Tab) {
         api = state.api,
         modifier = Modifier.fillMaxSize(),
         autoFocus = false,
-        emptyText = if (model.query.trim().length < 2) "Введите название фильма или сериала" else "Ничего не найдено",
+        emptyText = if (model.query.trim().length < 2) "Введите название фильма" else "Ничего не найдено",
         onItemClick = { state.navigate(Route.Detail(it.id)) },
         header = {
             item(span = { GridItemSpan(maxLineSpan) }, key = "search") {

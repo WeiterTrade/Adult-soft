@@ -7,6 +7,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.platform.Font
 import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowState
+import androidx.compose.ui.window.WindowPosition
+import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import java.awt.GraphicsEnvironment
 import java.awt.Desktop
 import java.net.InetAddress
 import java.net.URI
@@ -68,12 +75,44 @@ class DesktopPlatform(private val windowState: WindowState) : Platform {
         }
     }
 
-    fun toggleFullscreen() {
+    override val canToggleFullscreen: Boolean get() = true
+
+    // Окно без системной рамки: «развернуть» делаем сами, чтобы не перекрывать панель задач
+    private var restoreBounds: Pair<WindowPosition, DpSize>? = null
+    var isMaximized by mutableStateOf(false)
+        private set
+
+    fun toggleMaximize() {
+        if (windowState.placement == WindowPlacement.Fullscreen) {
+            windowState.placement = WindowPlacement.Floating
+            return
+        }
+        if (isMaximized) {
+            restoreBounds?.let { (pos, size) ->
+                windowState.position = pos
+                windowState.size = size
+            }
+            isMaximized = false
+        } else {
+            restoreBounds = windowState.position to windowState.size
+            val r = GraphicsEnvironment.getLocalGraphicsEnvironment().maximumWindowBounds
+            windowState.placement = WindowPlacement.Floating
+            windowState.position = WindowPosition(r.x.dp, r.y.dp)
+            windowState.size = DpSize(r.width.dp, r.height.dp)
+            isMaximized = true
+        }
+    }
+
+    fun minimize() {
+        windowState.isMinimized = true
+    }
+
+    override fun toggleFullscreen() {
         windowState.placement =
             if (windowState.placement == WindowPlacement.Fullscreen) WindowPlacement.Floating else WindowPlacement.Fullscreen
     }
 
-    val isFullscreen: Boolean get() = windowState.placement == WindowPlacement.Fullscreen
+    override val isFullscreen: Boolean get() = windowState.placement == WindowPlacement.Fullscreen
 
     override fun setPlayerMode(enabled: Boolean) {
         if (enabled) {
@@ -86,7 +125,12 @@ class DesktopPlatform(private val windowState: WindowState) : Platform {
     }
 
     @Composable
-    override fun VideoPlayer(request: PlaybackRequest, events: PlayerEvents, modifier: Modifier) {
-        VlcVideoPlayer(request, events, modifier, this)
+    override fun VideoSurface(
+        request: PlaybackRequest,
+        events: PlayerEvents,
+        onControl: (PlayerControl?) -> Unit,
+        modifier: Modifier,
+    ) {
+        VlcVideoSurface(request, events, onControl, modifier)
     }
 }

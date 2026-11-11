@@ -1,5 +1,6 @@
 package com.adultaristocrat.cinema.ui.screens
 
+import com.adultaristocrat.cinema.AppConfig
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -46,27 +47,27 @@ class BrowseModel(state: AppState, val tab: AppTab?, val folder: Route.Folder?) 
     val grid = GridModel(state.scope) { start, limit ->
         when {
             folder != null -> api.items(
-                parentId = folder.parentId, types = "Movie,Series", sortBy = "ProductionYear,SortName",
+                parentId = folder.parentId, types = AppConfig.CONTENT_TYPES, sortBy = "ProductionYear,SortName",
                 sortOrder = "Descending", startIndex = start, limit = limit,
             )
             tab == AppTab.CONTINUE -> {
                 if (start > 0) ItemsResult(emptyList(), 0) else {
                     val resume = runCatching { api.resume(limit = 100).items }.getOrDefault(emptyList())
-                    val next = runCatching { api.nextUp(limit = 50) }.getOrDefault(emptyList())
+                    val next = if (AppConfig.SHOW_SERIES) runCatching { api.nextUp(limit = 50) }.getOrDefault(emptyList()) else emptyList()
                     val all = (resume + next).distinctBy { it.id }
                     ItemsResult(all, all.size)
                 }
             }
             tab == AppTab.RANDOM -> {
                 if (start > 0) ItemsResult(emptyList(), 0)
-                else api.items(types = "Movie,Series", sortBy = "Random", limit = 60).let { ItemsResult(it.items, it.items.size) }
+                else api.items(types = AppConfig.CONTENT_TYPES, sortBy = "Random", limit = 60).let { ItemsResult(it.items, it.items.size) }
             }
             tab == AppTab.HISTORY -> api.items(
-                types = "Movie,Episode", filters = "IsPlayed", sortBy = "DatePlayed", sortOrder = "Descending",
+                types = AppConfig.PLAYABLE_TYPES, filters = "IsPlayed", sortBy = "DatePlayed", sortOrder = "Descending",
                 startIndex = start, limit = limit,
             )
             tab == AppTab.FAVORITES -> api.items(
-                types = "Movie,Series", filters = "IsFavorite", sortBy = "SortName", sortOrder = "Ascending",
+                types = AppConfig.CONTENT_TYPES, filters = "IsFavorite", sortBy = "SortName", sortOrder = "Ascending",
                 startIndex = start, limit = limit,
             )
             tab == AppTab.COLLECTIONS -> api.items(

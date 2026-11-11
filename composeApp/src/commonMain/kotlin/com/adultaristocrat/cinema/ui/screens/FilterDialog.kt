@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.adultaristocrat.cinema.AppConfig
 import com.adultaristocrat.cinema.api.ItemFilter
 import com.adultaristocrat.cinema.ui.AA
 import com.adultaristocrat.cinema.ui.AAButton
@@ -72,11 +73,13 @@ fun FilterDialog(
                 .padding(18.dp)
         ) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-                Label("Тип контента")
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AAChip("Все", types.isEmpty(), { types = emptySet() }, Modifier.focusRequester(firstFocus))
-                    AAChip("Фильмы", "Movie" in types, { types = toggle(types, "Movie") })
-                    AAChip("Сериалы", "Series" in types, { types = toggle(types, "Series") })
+                if (AppConfig.SHOW_SERIES) {
+                    Label("Тип контента")
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        AAChip("Все", types.isEmpty(), { types = emptySet() })
+                        AAChip("Фильмы", "Movie" in types, { types = toggle(types, "Movie") })
+                        AAChip("Сериалы", "Series" in types, { types = toggle(types, "Series") })
+                    }
                 }
 
                 Label("Жанры")
@@ -84,7 +87,7 @@ fun FilterDialog(
                     CircularProgressIndicator(color = AA.Red, modifier = Modifier.padding(8.dp))
                 } else {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        AAChip("Все жанры", selGenres.isEmpty(), { selGenres = emptySet() })
+                        AAChip("Все жанры", selGenres.isEmpty(), { selGenres = emptySet() }, Modifier.focusRequester(firstFocus))
                         genres.forEach { g ->
                             AAChip(g, g in selGenres, { selGenres = toggle(selGenres, g) })
                         }

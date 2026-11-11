@@ -60,6 +60,13 @@ data class TrailerDto(
 )
 
 @Serializable
+data class ChapterDto(
+    @SerialName("StartPositionTicks") val startPositionTicks: Long = 0,
+    @SerialName("Name") val name: String? = null,
+    @SerialName("ImageTag") val imageTag: String? = null,
+)
+
+@Serializable
 data class BaseItem(
     @SerialName("Id") val id: String,
     @SerialName("Name") val name: String? = null,
@@ -95,6 +102,7 @@ data class BaseItem(
     @SerialName("RemoteTrailers") val remoteTrailers: List<TrailerDto> = emptyList(),
     @SerialName("ProviderIds") val providerIds: Map<String, String> = emptyMap(),
     @SerialName("MediaSources") val mediaSources: List<MediaSource> = emptyList(),
+    @SerialName("Chapters") val chapters: List<ChapterDto> = emptyList(),
 ) {
     val isSeries get() = type == "Series"
     val isEpisode get() = type == "Episode"

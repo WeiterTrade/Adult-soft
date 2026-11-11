@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -57,6 +58,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.adultaristocrat.cinema.AppState
+import com.adultaristocrat.cinema.Chapter
+import androidx.compose.ui.unit.Dp
+import androidx.compose.material.icons.rounded.Movie
 import com.adultaristocrat.cinema.Route
 import com.adultaristocrat.cinema.api.BaseItem
 import com.adultaristocrat.cinema.api.JellyfinApi
@@ -382,6 +386,21 @@ private fun InfoBody(state: AppState, model: DetailModel, item: BaseItem, playFo
         }
     }
 
+    // Сцены (главы MKV)
+    val chapters = remember(item.id, item.chapters.size) { api.chaptersOf(item) }
+    if (chapters.isNotEmpty() && !item.isSeries) {
+        Spacer(Modifier.height(18.dp))
+        Text("Сцены", style = MaterialTheme.typography.titleLarge, color = AA.Text)
+        Spacer(Modifier.height(8.dp))
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(4.dp)) {
+            itemsIndexed(chapters) { i, ch ->
+                SceneCard(i, ch, if (ui.isPhone) 150.dp else 200.dp) {
+                    state.navigate(Route.Player(item.id, startMs = ch.startMs))
+                }
+            }
+        }
+    }
+
     // Актёры
     val cast = item.people.filter { it.type == "Actor" || it.type == "Director" }.take(25)
     if (cast.isNotEmpty()) {
@@ -455,5 +474,43 @@ private fun EpisodeRow(ep: BaseItem, api: JellyfinApi, compact: Boolean, onClick
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun SceneCard(index: Int, ch: Chapter, width: Dp, onClick: () -> Unit) {
+    val fv = rememberFocusVisual()
+    val shape = RoundedCornerShape(12.dp)
+    Column(
+        Modifier.width(width).clip(shape)
+            .background(if (fv.active) AA.Selector else Color(0x99101010))
+            .border(if (fv.active) 3.dp else 1.dp, if (fv.active) AA.Red else AA.BorderDark, shape)
+            .clickable(interactionSource = fv.interaction, indication = null, onClick = onClick)
+            .padding(6.dp)
+    ) {
+        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(8.dp)).background(AA.SurfaceHigh)) {
+            if (ch.imageUrl != null) {
+                AsyncImage(
+                    model = ch.imageUrl, contentDescription = ch.name,
+                    contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                Icon(Icons.Rounded.Movie, null, tint = AA.Border, modifier = Modifier.align(Alignment.Center).size(36.dp))
+            }
+            Icon(
+                Icons.Rounded.PlayArrow, null, tint = Color.White,
+                modifier = Modifier.align(Alignment.Center).size(if (fv.active) 40.dp else 0.dp),
+            )
+            Text(
+                formatTime(ch.startMs), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(4.dp)
+                    .clip(RoundedCornerShape(4.dp)).background(Color(0xCC000000)).padding(horizontal = 4.dp),
+            )
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "${index + 1}. ${ch.name}", color = if (fv.active) AA.RedHover else AA.Text,
+            fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
+        )
     }
 }
