@@ -1,0 +1,111 @@
+name: Build
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  APP_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '1.0.0' }}
+
+jobs:
+  android:
+    name: Android + Android TV (APK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Шрифты
+        run: bash scripts/fetch-assets.sh
+      - name: Сборка APK
+        run: ./gradlew :composeApp:assembleRelease --stacktrace
+      - name: Переименование
+        run: |
+          mkdir -p out
+          cp composeApp/build/outputs/apk/release/*.apk out/AdultAristocrat-android.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: out/*.apk
+
+  windows:
+    name: Windows 7/10/11
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Шрифты
+        run: bash scripts/fetch-assets.sh
+      - name: VLC (встраивается в программу)
+        run: bash scripts/fetch-vlc-windows.sh
+      - name: Сборка установщиков и портативной версии
+        run: ./gradlew :composeApp:packageMsi :composeApp:packageExe :composeApp:createDistributable --stacktrace
+      - name: Упаковка
+        run: |
+          mkdir -p out
+          cp composeApp/build/compose/binaries/main/msi/*.msi "out/AdultAristocrat-${APP_VERSION#v}-win10-11.msi"
+          cp composeApp/build/compose/binaries/main/exe/*.exe "out/AdultAristocrat-${APP_VERSION#v}-win10-11-setup.exe"
+          APPDIR=composeApp/build/compose/binaries/main/app/AdultAristocrat
+          cp packaging/win7/*.bat "$APPDIR/"
+          cd composeApp/build/compose/binaries/main/app
+          7z a -tzip "$GITHUB_WORKSPACE/out/AdultAristocrat-${APP_VERSION#v}-windows-portable-win7.zip" AdultAristocrat > /dev/null
+          ls -la "$GITHUB_WORKSPACE/out"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: out/*
+
+  linux:
+    name: Linux (deb + tar.gz)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Шрифты
+        run: bash scripts/fetch-assets.sh
+      - name: Сборка
+        run: ./gradlew :composeApp:packageDeb :composeApp:createDistributable --stacktrace
+      - name: Упаковка
+        run: |
+          mkdir -p out
+          cp composeApp/build/compose/binaries/main/deb/*.deb out/
+          tar -czf "out/AdultAristocrat-${APP_VERSION#v}-linux-x64.tar.gz" -C composeApp/build/compose/binaries/main/app AdultAristocrat
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: out/*
+
+  release:
+    name: Публикация релиза
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [ android, windows, linux ]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
