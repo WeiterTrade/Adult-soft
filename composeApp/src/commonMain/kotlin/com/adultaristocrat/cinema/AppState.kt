@@ -88,6 +88,58 @@ class AppState(val platform: Platform) {
         }
         stack.clear()
         stack.add(tabRoute(AppTab.HOME))
+        startConnectivityWatch()
+    }
+
+    // ---------------- Связь с сервером: авто-переключение онлайн / офлайн ----------------
+
+    /** null — ещё не проверяли */
+    var serverReachable by mutableStateOf<Boolean?>(null)
+        private set
+    private var autoOffline = false
+
+    private fun startConnectivityWatch() {
+        scope.launch {
+            while (true) {
+                val server = if (AppConfig.isServerLocked) AppConfig.SERVER_URL else (store.get(K_SERVER) ?: "")
+                val ok = if (server.isBlank()) true else runCatching {
+                    kotlinx.coroutines.withTimeout(6000) { api.publicInfo(server) }
+                    true
+                }.getOrDefault(false)
+                onReachability(ok)
+                kotlinx.coroutines.delay(if (ok) 30_000 else 10_000)
+            }
+        }
+    }
+
+    /** Нажали «проверить связь» или открыли приложение — проверка сразу */
+    fun checkConnectionNow() {
+        scope.launch {
+            val server = if (AppConfig.isServerLocked) AppConfig.SERVER_URL else (store.get(K_SERVER) ?: "")
+            if (server.isBlank()) return@launch
+            val ok = runCatching { kotlinx.coroutines.withTimeout(6000) { api.publicInfo(server) }; true }.getOrDefault(false)
+            onReachability(ok)
+        }
+    }
+
+    private fun onReachability(ok: Boolean) {
+        serverReachable = ok
+        // Во время просмотра не переключаемся — только после выхода из плеера
+        if (current is Route.Player) return
+        val canOffline = offline.enabled && offline.state.movies.isNotEmpty()
+        if (offline.forceOffline && canOffline) {
+            if (!offlineMode) enterOffline()
+            return
+        }
+        if (!ok && canOffline && !offlineMode) {
+            autoOffline = true
+            enterOffline()
+            showToast("Нет связи с сервером — включена офлайн-библиотека")
+        } else if (ok && offlineMode && !offline.forceOffline) {
+            autoOffline = false
+            exitOffline()
+            showToast(if (loggedIn) "Связь восстановлена — онлайн-библиотека" else "Связь восстановлена — войдите в аккаунт")
+        }
     }
 
     suspend fun login(server: String, user: String, password: String) {

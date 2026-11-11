@@ -1,5 +1,6 @@
 package com.adultaristocrat.cinema.ui.screens
 
+import com.adultaristocrat.cinema.ui.AATextField
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -161,7 +162,7 @@ private fun QuickConnectAuthorize(state: AppState) {
             color = AA.TextDim, style = MaterialTheme.typography.bodySmall,
         )
         Row(verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
+            AATextField(
                 value = code,
                 onValueChange = { v -> code = v.filter { it.isDigit() }.take(8) },
                 singleLine = true,

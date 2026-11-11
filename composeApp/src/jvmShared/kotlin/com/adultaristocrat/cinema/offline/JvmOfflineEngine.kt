@@ -13,7 +13,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
-import org.w3c.dom.Element
 import java.io.BufferedOutputStream
 import java.io.InputStream
 import java.net.Inet4Address
@@ -28,7 +27,6 @@ import java.util.Properties
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
-import javax.xml.parsers.DocumentBuilderFactory
 import kotlin.coroutines.coroutineContext
 
 /**
@@ -182,10 +180,13 @@ class JvmOfflineEngine : OfflineEngine {
             }.getOrNull()
         } ?: emptyMap()
 
-        val nfo = nfoFile?.let { runCatching { parseNfo(readText(it)) }.getOrNull() }
+        val nfo = nfoFile?.let { runCatching { readNfo(it) }.getOrNull() }
 
         fun actorThumb(name: String, nfoThumb: String?): String? {
             if (!nfoThumb.isNullOrBlank() && (nfoThumb.startsWith("http://") || nfoThumb.startsWith("https://"))) return nfoThumb
+            // Относительный путь из NFO (.actors/Имя_Фамилия.jpg) — берём имя файла
+            nfoThumb?.replace('\\', '/')?.substringAfterLast('/')?.substringBeforeLast('.')?.lowercase()
+                ?.let { actorPics[it] }?.let { return it }
             val keys = listOf(name.replace(' ', '_'), name, name.replace(' ', '.'))
             return keys.firstNotNullOfOrNull { actorPics[it.lowercase()] }
         }
@@ -210,7 +211,7 @@ class JvmOfflineEngine : OfflineEngine {
             video = video.path,
             poster = poster?.path,
             fanart = fanart?.path,
-            actors = nfo?.actors()?.map { (n, role, thumb) -> OfflineActor(n, role, actorThumb(n, thumb)) }
+            actors = nfo?.actors()?.takeIf { it.isNotEmpty() }?.map { (n, role, thumb) -> OfflineActor(n, role, actorThumb(n, thumb)) }
                 ?: actorPics.keys.map { OfflineActor(it.replace('_', ' ').replaceFirstChar { c -> c.uppercase() }, null, actorPics[it]) },
             directors = nfo?.list("director").orEmpty(),
             chapters = if (video.name.lowercase().endsWith(".mkv")) readChapters(video) else emptyList(),
@@ -229,58 +230,9 @@ class JvmOfflineEngine : OfflineEngine {
         }
     }.getOrDefault(emptyList())
 
-    private fun readText(f: SmbFile): String {
+    private fun readNfo(f: SmbFile): Nfo? {
         val bytes = f.inputStream.use { it.readBytes() }
-        var s = String(bytes, Charsets.UTF_8).removePrefix("﻿")
-        // В конце Kodi-NFO может быть ссылка — отрезаем всё после </movie>
-        val end = s.lastIndexOf("</movie>", ignoreCase = true)
-        if (end >= 0) s = s.substring(0, end + "</movie>".length)
-        return s
-    }
-
-    private class Nfo(val root: Element) {
-        private fun direct(tag: String): List<Element> {
-            val res = mutableListOf<Element>()
-            val nodes = root.childNodes
-            for (i in 0 until nodes.length) {
-                val n = nodes.item(i)
-                if (n is Element && n.tagName.equals(tag, ignoreCase = true)) res += n
-            }
-            return res
-        }
-
-        fun text(tag: String): String? = direct(tag).firstOrNull()?.textContent?.trim()?.takeIf { it.isNotEmpty() }
-
-        fun list(tag: String): List<String> =
-            direct(tag).flatMap { it.textContent.split("/", "|") }.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
-
-        fun rating(): Float? {
-            text("rating")?.replace(',', '.')?.toFloatOrNull()?.let { return it }
-            val ratings = direct("ratings").firstOrNull() ?: return null
-            val items = ratings.getElementsByTagName("rating")
-            var best: Float? = null
-            for (i in 0 until items.length) {
-                val e = items.item(i) as? Element ?: continue
-                val v = (e.getElementsByTagName("value").item(0)?.textContent ?: continue).replace(',', '.').toFloatOrNull()
-                if (e.getAttribute("default") == "true") return v
-                if (best == null) best = v
-            }
-            return best
-        }
-
-        fun actors(): List<Triple<String, String?, String?>> = direct("actor").mapNotNull { a ->
-            fun child(t: String) = a.getElementsByTagName(t).item(0)?.textContent?.trim()?.takeIf { it.isNotEmpty() }
-            val name = child("name") ?: return@mapNotNull null
-            Triple(name, child("role"), child("thumb"))
-        }
-    }
-
-    private fun parseNfo(xml: String): Nfo? {
-        val f = DocumentBuilderFactory.newInstance()
-        runCatching { f.isNamespaceAware = false }
-        val doc = f.newDocumentBuilder().parse(xml.byteInputStream(Charsets.UTF_8))
-        val root = doc.documentElement ?: return null
-        return Nfo(root)
+        return Nfo.parse(bytes)
     }
 
     // ---------------- Локальный HTTP-сервер ----------------

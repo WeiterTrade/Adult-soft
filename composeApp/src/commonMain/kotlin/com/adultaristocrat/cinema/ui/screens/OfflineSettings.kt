@@ -1,5 +1,6 @@
 package com.adultaristocrat.cinema.ui.screens
 
+import com.adultaristocrat.cinema.ui.AATextField
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -95,7 +96,22 @@ fun OfflineSettings(state: AppState) {
 
         if (expanded) {
             Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                SwitchRow("Включить офлайн-библиотеку", st.enabled) { lib.setEnabled(it) }
+                SwitchRow("Включить офлайн-библиотеку", st.enabled) {
+                    lib.setEnabled(it)
+                    state.checkConnectionNow()
+                }
+                if (st.enabled) {
+                    Text(
+                        "Без интернета или когда сервер недоступен, приложение само переключится на офлайн-библиотеку, " +
+                            "а когда связь вернётся — обратно на сервер.",
+                        color = AA.TextDim, style = MaterialTheme.typography.bodySmall,
+                    )
+                    SwitchRow("Всегда офлайн (не подключаться к серверу)", st.forceOffline) {
+                        lib.setForceOffline(it)
+                        if (!it && state.offlineMode) state.exitOffline()
+                        state.checkConnectionNow()
+                    }
+                }
 
                 if (st.enabled) {
                     Text(
@@ -135,7 +151,10 @@ fun OfflineSettings(state: AppState) {
                             }
                         } else {
                             AAButton("Сканировать папки", Icons.Rounded.Refresh, {
-                                lib.scan { n -> state.showToast("Офлайн-библиотека: найдено фильмов — $n") }
+                                lib.scan { n ->
+                                    state.showToast("Офлайн-библиотека: найдено фильмов — $n")
+                                    state.checkConnectionNow()
+                                }
                             })
                             lib.scanStatus?.let { Text(it, color = AA.TextDim, style = MaterialTheme.typography.bodySmall) }
                         }
@@ -345,17 +364,17 @@ private fun AddSourceDialog(state: AppState, initialHost: String, onClose: () ->
     DialogFrame(if (share == null) "Подключение к компьютеру" else "Выберите папку", onClose) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (shares == null) {
-                OutlinedTextField(
+                AATextField(
                     value = host, onValueChange = { host = it.trim() }, singleLine = true,
                     label = { Text("IP-адрес или имя компьютера") }, placeholder = { Text("192.168.1.10") },
                     colors = aaFieldColors(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
+                AATextField(
                     value = user, onValueChange = { user = it }, singleLine = true,
                     label = { Text("Пользователь (если нужен)") }, colors = aaFieldColors(), modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
+                AATextField(
                     value = password, onValueChange = { password = it }, singleLine = true,
                     label = { Text("Пароль (если нужен)") }, visualTransformation = PasswordVisualTransformation(),
                     colors = aaFieldColors(), modifier = Modifier.fillMaxWidth(),

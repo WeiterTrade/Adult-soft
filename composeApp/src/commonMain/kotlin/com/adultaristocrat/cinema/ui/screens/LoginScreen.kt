@@ -1,5 +1,6 @@
 package com.adultaristocrat.cinema.ui.screens
 
+import com.adultaristocrat.cinema.ui.AATextField
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -169,7 +170,7 @@ fun LoginScreen(state: AppState) {
                 Text(AppConfig.APP_NAME.uppercase(), style = brandStyle(26), textAlign = TextAlign.Center)
             }
             Spacer(Modifier.height(4.dp))
-            if (!AppConfig.isServerLocked) OutlinedTextField(
+            if (!AppConfig.isServerLocked) AATextField(
                 value = server, onValueChange = { server = it },
                 label = { Text("Адрес сервера") },
                 placeholder = { Text("http://192.168.1.10:8096") },
@@ -178,7 +179,7 @@ fun LoginScreen(state: AppState) {
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
                 modifier = Modifier.fillMaxWidth(),
             )
-            OutlinedTextField(
+            AATextField(
                 value = user, onValueChange = { user = it },
                 label = { Text("Логин") },
                 singleLine = true,
@@ -186,7 +187,7 @@ fun LoginScreen(state: AppState) {
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                 modifier = Modifier.fillMaxWidth(),
             )
-            OutlinedTextField(
+            AATextField(
                 value = password, onValueChange = { password = it },
                 label = { Text("Пароль") },
                 singleLine = true,

@@ -136,7 +136,7 @@ fun HomeScreen(state: AppState, route: Route.Tab) {
                                 AAChip(v.name ?: "", model.mode == HomeMode.Library(v.id), { model.select(HomeMode.Library(v.id)) })
                             }
                         }
-                        if (state.offline.hasMovies) {
+                        if (state.offlineMode && state.offline.hasMovies) {
                             item {
                                 AAChip(
                                     "Офлайн", model.mode == HomeMode.Offline, { model.select(HomeMode.Offline) },

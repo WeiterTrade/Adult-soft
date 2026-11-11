@@ -52,6 +52,8 @@ data class OfflineMovie(
 @Serializable
 data class OfflineState(
     val enabled: Boolean = false,
+    /** Всегда офлайн: не подключаться к серверу, даже если он доступен */
+    val forceOffline: Boolean = false,
     val sources: List<OfflineSource> = emptyList(),
     val movies: List<OfflineMovie> = emptyList(),
     /** id → позиция в мс; отрицательное — просмотрено */

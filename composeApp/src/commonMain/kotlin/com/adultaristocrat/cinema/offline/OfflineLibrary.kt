@@ -57,6 +57,10 @@ class OfflineLibrary(private val platform: Platform, private val scope: Coroutin
 
     fun setEnabled(v: Boolean) = update(state.copy(enabled = v))
 
+    fun setForceOffline(v: Boolean) = update(state.copy(forceOffline = v))
+
+    val forceOffline: Boolean get() = enabled && state.forceOffline
+
     fun addSource(src: OfflineSource) {
         if (state.sources.any { it.smbUrl.equals(src.smbUrl, ignoreCase = true) }) return
         update(state.copy(sources = state.sources + src))

@@ -202,6 +202,15 @@ fun PlayerOverlay(
                     Key.MediaPlayPause, Key.MediaPlay, Key.MediaPause, Key.Spacebar, Key.K -> { togglePause(); true }
                     Key.MediaNext, Key.ChannelUp, Key.PageDown, Key.N -> { nextChapter(); true }
                     Key.MediaPrevious, Key.ChannelDown, Key.PageUp, Key.P -> { prevChapter(); true }
+                    // «Стоп» на пульте — выйти из фильма (позиция сохраняется)
+                    Key.MediaStop, Key.MediaClose -> { events.onBack(); true }
+                    // Меню / Инфо / цветные кнопки пульта
+                    Key.Menu, Key.Info, Key.Guide, Key.ProgramRed -> {
+                        if (chapters.isNotEmpty()) { panel = if (panel == Panel.SCENES) Panel.NONE else Panel.SCENES; activity() }
+                        true
+                    }
+                    Key.ProgramGreen -> { panel = if (panel == Panel.AUDIO) Panel.NONE else Panel.AUDIO; activity(); true }
+                    Key.ProgramYellow, Key.Captions -> { panel = if (panel == Panel.SUBS) Panel.NONE else Panel.SUBS; activity(); true }
                     Key.MediaFastForward -> { seekTo(pos + 30_000); true }
                     Key.MediaRewind -> { seekTo(pos - 30_000); true }
                     Key.F -> if (platform.canToggleFullscreen) { platform.toggleFullscreen(); true } else false

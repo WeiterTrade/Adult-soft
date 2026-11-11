@@ -1,5 +1,6 @@
 package com.adultaristocrat.cinema.ui.screens
 
+import com.adultaristocrat.cinema.ui.AATextField
 import com.adultaristocrat.cinema.AppConfig
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -63,7 +64,7 @@ fun SearchScreen(state: AppState, route: Route.Tab) {
         onItemClick = { state.navigate(Route.Detail(it.id)) },
         header = {
             item(span = { GridItemSpan(maxLineSpan) }, key = "search") {
-                OutlinedTextField(
+                AATextField(
                     value = model.query,
                     onValueChange = { model.query = it },
                     singleLine = true,
