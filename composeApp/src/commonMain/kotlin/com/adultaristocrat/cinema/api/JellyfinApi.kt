@@ -310,9 +310,14 @@ class JellyfinApi(
             q("DeviceId", deviceId) + q("api_key", token)
 
     /** HLS с перекодированием в H.264 + AAC (если устройство не тянет оригинал) */
-    fun transcodeUrl(itemId: String, mediaSourceId: String?, playSessionId: String?, maxBitrate: Int = 20_000_000): String =
+    fun transcodeUrl(
+        itemId: String, mediaSourceId: String?, playSessionId: String?,
+        maxBitrate: Int = 20_000_000, maxHeight: Int = 0,
+    ): String =
         "$baseUrl/Videos/$itemId/master.m3u8?VideoCodec=h264&AudioCodec=aac,mp3" +
-            "&MaxAudioChannels=2&TranscodingMaxAudioChannels=2&AudioBitrate=192000" +
+            "&MaxAudioChannels=2&TranscodingMaxAudioChannels=2" +
+            "&AudioBitrate=${if (maxBitrate in 1..1_000_000) 96000 else 192000}" +
+            (if (maxHeight > 0) "&MaxHeight=$maxHeight&MaxWidth=${maxHeight * 16 / 9 + 1}" else "") +
             "&VideoBitrate=$maxBitrate&MaxStreamingBitrate=$maxBitrate&SegmentContainer=ts&BreakOnNonKeyFrames=true" +
             q("MediaSourceId", mediaSourceId) + q("PlaySessionId", playSessionId) +
             q("DeviceId", deviceId) + q("api_key", token)

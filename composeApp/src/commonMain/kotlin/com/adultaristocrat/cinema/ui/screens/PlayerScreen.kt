@@ -15,6 +15,7 @@ import com.adultaristocrat.cinema.AppState
 import com.adultaristocrat.cinema.PlaybackRequest
 import com.adultaristocrat.cinema.PlayerControl
 import com.adultaristocrat.cinema.PlayerEvents
+import com.adultaristocrat.cinema.Quality
 import com.adultaristocrat.cinema.ui.PlayerOverlay
 import androidx.compose.runtime.remember
 import com.adultaristocrat.cinema.Route
@@ -81,7 +82,7 @@ class PlayerModel(private val state: AppState, private val route: Route.Player) 
                 // Android сразу идёт через HLS-переупаковку: сцены и перемотка работают всегда, без пробного запуска.
                 // ПК (VLC) перематывает MKV сам — играет файл напрямую.
                 mode = when {
-                    state.forceTranscode -> Mode.TRANSCODE
+                    state.forceTranscode || state.quality != Quality.ORIGINAL -> Mode.TRANSCODE
                     state.platform.isDesktop || state.directPlay -> Mode.DIRECT
                     else -> Mode.REMUX
                 }
@@ -107,7 +108,11 @@ class PlayerModel(private val state: AppState, private val route: Route.Player) 
         return when (mode) {
             Mode.DIRECT -> api.directStreamUrl(id, mediaSourceId, playSessionId)
             Mode.REMUX -> api.remuxUrl(id, mediaSourceId, playSessionId)
-            Mode.TRANSCODE -> api.transcodeUrl(id, mediaSourceId, playSessionId)
+            Mode.TRANSCODE -> {
+                val q = state.quality
+                if (q == Quality.ORIGINAL) api.transcodeUrl(id, mediaSourceId, playSessionId)
+                else api.transcodeUrl(id, mediaSourceId, playSessionId, maxBitrate = q.bitrate, maxHeight = q.maxHeight)
+            }
         }
     }
 
@@ -184,6 +189,26 @@ class PlayerModel(private val state: AppState, private val route: Route.Player) 
         val r = request ?: return
         mode = m
         request = r.copy(url = buildUrl(), startPositionMs = lastPosMs, key = "${route.itemId}-${attempt++}")
+    }
+
+    override val quality: Quality? get() = if (offline) null else state.quality
+
+    /** Смена качества прямо в плеере: перезапуск потока с того же места, выбор запоминается */
+    override fun onQuality(q: Quality) {
+        if (offline || q == state.quality) return
+        state.updateQuality(q)
+        val m = when {
+            q != Quality.ORIGINAL || state.forceTranscode -> Mode.TRANSCODE
+            state.platform.isDesktop || state.directPlay -> Mode.DIRECT
+            else -> Mode.REMUX
+        }
+        if (item != null) {
+            val r = report()
+            state.scope.launch { api.reportStopped(r) }
+            playSessionId = null
+        }
+        switchMode(m)
+        state.scope.launch { api.reportStart(report()) }
     }
 
     override fun onBack() {

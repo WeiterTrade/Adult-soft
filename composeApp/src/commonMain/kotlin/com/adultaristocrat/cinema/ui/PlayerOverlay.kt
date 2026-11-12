@@ -87,6 +87,8 @@ import com.adultaristocrat.cinema.ScaleMode
 import androidx.compose.material.icons.rounded.AspectRatio
 import com.adultaristocrat.cinema.ui.screens.formatTime
 import kotlinx.coroutines.delay
+import com.adultaristocrat.cinema.Quality
+import androidx.compose.material.icons.rounded.HighQuality
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
@@ -96,7 +98,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
-private enum class Panel { NONE, SCENES, AUDIO, SUBS }
+private enum class Panel { NONE, SCENES, AUDIO, SUBS, QUALITY }
 
 private const val HIDE_AFTER_TICKS = 8 // 8 × 0,5 с = 4 с
 
@@ -254,6 +256,7 @@ fun PlayerOverlay(
                         true
                     }
                     Key.ProgramBlue, Key.Z -> { cycleScale(); true }
+                    Key.Q -> if (events.quality != null) { panel = if (panel == Panel.QUALITY) Panel.NONE else Panel.QUALITY; activity(); true } else false
                     Key.ProgramGreen -> { panel = if (panel == Panel.AUDIO) Panel.NONE else Panel.AUDIO; activity(); true }
                     Key.ProgramYellow, Key.Captions -> { panel = if (panel == Panel.SUBS) Panel.NONE else Panel.SUBS; activity(); true }
                     Key.MediaFastForward -> { seekTo(pos + 30_000); true }
@@ -479,6 +482,16 @@ fun PlayerOverlay(
                         panel = if (panel == Panel.AUDIO) Panel.NONE else Panel.AUDIO
                         activity()
                     }
+                    events.quality?.let { q ->
+                        CtrlButton(
+                            Icons.Rounded.HighQuality, "Качество: ${q.title}",
+                            label = if (q == Quality.ORIGINAL) (if (ui.isPhone) null else "Оригинал") else q.title,
+                            active = panel == Panel.QUALITY,
+                        ) {
+                            panel = if (panel == Panel.QUALITY) Panel.NONE else Panel.QUALITY
+                            activity()
+                        }
+                    }
                     CtrlButton(
                         Icons.Rounded.AspectRatio, "Картинка: ${scaleMode.title}",
                         label = if (ui.isPhone) null else scaleMode.title,
@@ -494,6 +507,20 @@ fun PlayerOverlay(
                         ) { platform.toggleFullscreen(); activity() }
                     }
                 }
+            }
+        }
+
+        if (panel == Panel.QUALITY) {
+            val cur = events.quality ?: Quality.ORIGINAL
+            TrackPanel(
+                title = "Качество",
+                options = Quality.entries.map {
+                    TrackOption(it.name, if (it == Quality.ORIGINAL) "Оригинал (${it.hint})" else "${it.title} · ${it.hint}", it == cur)
+                },
+                modifier = Modifier.align(Alignment.CenterEnd),
+            ) { opt ->
+                panel = Panel.NONE
+                events.onQuality(Quality.of(opt.id))
             }
         }
 

@@ -31,6 +31,9 @@ interface PlayerEvents {
     fun onBack()
     /** Файл нельзя перематывать напрямую (например, MKV без индекса) — нужен HLS */
     fun onUnseekable() {}
+    /** Текущее качество (null — выбор недоступен, например офлайн-файл) */
+    val quality: Quality? get() = null
+    fun onQuality(q: Quality) {}
 }
 
 /** Дорожка звука или субтитров */

@@ -81,6 +81,7 @@ fun SettingsScreen(state: AppState) {
         }
 
         SectionTitle("Воспроизведение")
+        QualityRow(state)
         ToggleRow(
             "Всегда перекодировать видео",
             "Включите, если видео не запускается или нет звука (DTS, TrueHD). Нагружает сервер.",
@@ -116,6 +117,33 @@ private fun InfoRow(label: String, value: String) {
     ) {
         Text(label, color = AA.Text, style = MaterialTheme.typography.titleSmall, modifier = Modifier.width(130.dp))
         Text(value, color = AA.TextDim, modifier = Modifier.weight(1f))
+    }
+}
+
+/** Качество видео по умолчанию — для слабого или мобильного интернета */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun QualityRow(state: AppState) {
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
+            .background(Color(0xE0101010))
+            .border(1.dp, AA.BorderDark, RoundedCornerShape(10.dp))
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+    ) {
+        Text("Качество видео", color = AA.Text, style = MaterialTheme.typography.titleSmall)
+        Text(
+            "Для слабого интернета выберите 480p или ниже — сервер уменьшит видео. Можно менять и в плеере.",
+            color = AA.TextDim, style = MaterialTheme.typography.bodySmall,
+        )
+        Spacer(Modifier.height(8.dp))
+        androidx.compose.foundation.layout.FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            com.adultaristocrat.cinema.Quality.entries.forEach { q ->
+                com.adultaristocrat.cinema.ui.AAChip(q.title, state.quality == q, { state.updateQuality(q) })
+            }
+        }
     }
 }
 

@@ -190,6 +190,15 @@ class AppState(val platform: Platform) {
     var directPlay by mutableStateOf(store.get(K_DIRECT_PLAY) == "1")
         private set
 
+    /** Качество видео по умолчанию (меняется и прямо в плеере) */
+    var quality by mutableStateOf(Quality.of(store.get(K_QUALITY)))
+        private set
+
+    fun updateQuality(q: Quality) {
+        quality = q
+        store.put(K_QUALITY, q.name)
+    }
+
     fun updateDirectPlay(v: Boolean) {
         directPlay = v
         store.put(K_DIRECT_PLAY, if (v) "1" else "0")
@@ -305,5 +314,6 @@ class AppState(val platform: Platform) {
         private const val K_FORCE_TRANSCODE = "forceTranscode"
         private const val K_AUTO_NEXT = "autoNext"
         private const val K_DIRECT_PLAY = "directPlay"
+        private const val K_QUALITY = "quality"
     }
 }
