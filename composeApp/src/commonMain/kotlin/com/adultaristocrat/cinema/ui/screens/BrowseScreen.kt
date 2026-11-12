@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Shuffle
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.foundation.background
@@ -40,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import com.adultaristocrat.cinema.AppState
 import com.adultaristocrat.cinema.AppTab
 import com.adultaristocrat.cinema.Route
+import com.adultaristocrat.cinema.api.BaseItem
 import com.adultaristocrat.cinema.api.ItemsResult
 import com.adultaristocrat.cinema.ui.AAChip
 import com.adultaristocrat.cinema.ui.GridModel
@@ -48,6 +50,8 @@ import com.adultaristocrat.cinema.ui.SectionTitle
 
 class BrowseModel(state: AppState, val tab: AppTab?, val folder: Route.Folder?) {
     private val api = state.api
+    /** Экран уже показывали — при возврате История и Избранное обновляются */
+    var shownOnce = false
 
     val title: String = folder?.title ?: when (tab) {
         AppTab.CONTINUE -> "Продолжить просмотр"
@@ -121,6 +125,46 @@ fun BrowseScreen(state: AppState, route: Route, tab: AppTab?, folder: Route.Fold
     val model = state.model(route) { BrowseModel(state, tab, folder) }
     var confirmClear by remember { mutableStateOf(false) }
     var clearing by remember { mutableStateOf(false) }
+    var removeFav by remember { mutableStateOf<BaseItem?>(null) }
+
+    // История и избранное меняются, пока мы смотрим фильмы — обновляем при каждом открытии
+    LaunchedEffect(Unit) {
+        if (model.shownOnce && (tab == AppTab.HISTORY || tab == AppTab.FAVORITES)) model.grid.reload()
+        model.shownOnce = true
+    }
+
+    removeFav?.let { item ->
+        val okFocus = remember { FocusRequester() }
+        Dialog(onDismissRequest = { removeFav = null }) {
+            Column(
+                Modifier.widthIn(max = 460.dp).background(Color(0xF5080000), RoundedCornerShape(18.dp))
+                    .border(1.dp, AA.Border, RoundedCornerShape(18.dp)).padding(22.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Text("Удалить?", color = AA.Text, style = MaterialTheme.typography.titleLarge)
+                Text("Удалить «${item.name ?: "фильм"}» из избранного?", color = AA.TextDim)
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    AAButton("Отмена", Icons.Rounded.Close, { removeFav = null }, primary = false)
+                    AAButton("Удалить", Icons.Rounded.Delete, {
+                        removeFav = null
+                        state.scope.launch {
+                            val ok = runCatching { state.api.setFavorite(item.id, false) }.isSuccess
+                            if (ok) {
+                                model.grid.items.removeAll { it.id == item.id }
+                                state.showToast("Удалено из избранного")
+                            } else {
+                                state.showToast("Не удалось удалить — нет связи с сервером")
+                            }
+                        }
+                    }, Modifier.focusRequester(okFocus))
+                }
+            }
+        }
+        LaunchedEffect(item.id) {
+            delay(100)
+            runCatching { okFocus.requestFocus() }
+        }
+    }
 
     /** Очистка истории: на сервере фильмы помечаются «не просмотрено» (сбрасывается и позиция) */
     fun clearHistory() {
@@ -174,6 +218,7 @@ fun BrowseScreen(state: AppState, route: Route, tab: AppTab?, folder: Route.Fold
         wide = model.wide,
         emptyText = model.emptyText,
         modifier = Modifier.fillMaxSize(),
+        onItemLongClick = if (tab == AppTab.FAVORITES) ({ item -> removeFav = item }) else null,
         onItemClick = { item ->
             when {
                 item.type == "BoxSet" -> state.navigate(Route.Folder(item.id, item.name ?: ""))

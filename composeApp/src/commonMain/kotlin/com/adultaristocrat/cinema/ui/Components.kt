@@ -48,6 +48,22 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.isSecondaryPressed
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import com.adultaristocrat.cinema.api.BaseItem
 import com.adultaristocrat.cinema.api.JellyfinApi
 
@@ -83,6 +99,7 @@ fun AAChip(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
+    leading: (@Composable () -> Unit)? = null,
 ) {
     val fv = rememberFocusVisual()
     val scale by animateFloatAsState(if (fv.active) 1.06f else 1f)
@@ -108,6 +125,10 @@ fun AAChip(
         if (icon != null) {
             Icon(icon, null, tint = AA.Text, modifier = Modifier.size(18.dp))
             if (text.isNotEmpty()) Spacer(Modifier.width(6.dp))
+        }
+        if (leading != null) {
+            leading()
+            if (text.isNotEmpty()) Spacer(Modifier.width(8.dp))
         }
         if (text.isNotEmpty()) {
             Text(
@@ -209,6 +230,7 @@ fun PosterCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
+    onLongClick: (() -> Unit)? = null,
 ) {
     val fv = rememberFocusVisual()
     val scale by animateFloatAsState(if (fv.active) 1.06f else 1f)
@@ -216,7 +238,7 @@ fun PosterCard(
     Column(
         modifier
             .scale(scale)
-            .clickable(interactionSource = fv.interaction, indication = null, onClick = onClick)
+            .aaClickable(fv, onClick, onLongClick)
             .padding(4.dp)
     ) {
         Box(
@@ -392,3 +414,73 @@ fun Logo(size: Dp, modifier: Modifier = Modifier) {
     }
 }
 
+
+/** Флаг страны (картинка, т.к. эмодзи-флаги не рисуются в Windows) */
+@Composable
+fun FlagImage(country: Countries.Country, modifier: Modifier = Modifier) {
+    AsyncImage(
+        model = country.flagUrl,
+        contentDescription = country.ru,
+        contentScale = ContentScale.Crop,
+        modifier = modifier.size(width = 22.dp, height = 15.dp).clip(RoundedCornerShape(2.dp)),
+    )
+}
+
+/**
+ * Нажатие с «долгим нажатием»:
+ * телефон — удержание пальца, ТВ — удержание OK на пульте, ПК — правая кнопка мыши.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun Modifier.aaClickable(fv: FocusVisual, onClick: () -> Unit, onLongClick: (() -> Unit)?): Modifier {
+    if (onLongClick == null) return clickable(interactionSource = fv.interaction, indication = null, onClick = onClick)
+    val scope = rememberCoroutineScope()
+    val click by rememberUpdatedState(onClick)
+    val long by rememberUpdatedState(onLongClick)
+    val hold = remember { arrayOfNulls<Job>(1) }
+    val fired = remember { BooleanArray(1) }
+    return this
+        // Пульт / клавиатура: держим OK дольше 0,6 с — долгое нажатие
+        .onPreviewKeyEvent { e ->
+            val ok = e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter
+            if (!ok) return@onPreviewKeyEvent false
+            when (e.type) {
+                KeyEventType.KeyDown -> {
+                    if (hold[0] == null) {
+                        fired[0] = false
+                        hold[0] = scope.launch {
+                            delay(600)
+                            fired[0] = true
+                            long()
+                        }
+                    }
+                    true
+                }
+                KeyEventType.KeyUp -> {
+                    val j = hold[0] ?: return@onPreviewKeyEvent false
+                    hold[0] = null
+                    j.cancel()
+                    if (!fired[0]) click()
+                    true
+                }
+                else -> false
+            }
+        }
+        // Мышь: правая кнопка
+        .pointerInput(Unit) {
+            awaitPointerEventScope {
+                while (true) {
+                    val ev = awaitPointerEvent(PointerEventPass.Initial)
+                    if (ev.type == PointerEventType.Press && ev.buttons.isSecondaryPressed) {
+                        ev.changes.forEach { it.consume() }
+                        long()
+                    }
+                }
+            }
+        }
+        // Палец: удержание
+        .combinedClickable(
+            interactionSource = fv.interaction, indication = null,
+            onLongClick = { long() }, onClick = { click() },
+        )
+}

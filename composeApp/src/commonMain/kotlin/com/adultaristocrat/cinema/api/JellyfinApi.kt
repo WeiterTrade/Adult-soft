@@ -195,6 +195,27 @@ class JellyfinApi(
         )
     )
 
+    /**
+     * Лёгкий список всех фильмов раздела (без картинок) — для фильтра:
+     * какие годы, страны и жанры реально есть, и для фильтра по странам
+     * (сервер Jellyfin сам по странам не фильтрует).
+     */
+    suspend fun facetIndex(parentId: String?, sortBy: String, sortOrder: String): List<BaseItem> = getJson<ItemsResult>(
+        "/Items",
+        mapOf(
+            "userId" to userId,
+            "ParentId" to parentId,
+            "IncludeItemTypes" to AppConfig.CONTENT_TYPES,
+            "Recursive" to true,
+            "SortBy" to sortBy,
+            "SortOrder" to sortOrder,
+            "Fields" to "Genres,ProductionLocations",
+            "EnableImages" to false,
+            "EnableUserData" to false,
+            "EnableTotalRecordCount" to false,
+        )
+    ).items
+
     suspend fun item(id: String): BaseItem =
         items(ids = id, types = null, recursive = false, sortBy = "SortName", sortOrder = "Ascending", fields = DETAIL_FIELDS, limit = 1)
             .items.firstOrNull() ?: error("Элемент не найден")

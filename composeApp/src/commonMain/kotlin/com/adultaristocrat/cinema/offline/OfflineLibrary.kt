@@ -148,6 +148,9 @@ class OfflineLibrary(private val platform: Platform, private val scope: Coroutin
         var list = items()
         if (filter.genres.isNotEmpty()) list = list.filter { m -> m.genres.any { it in filter.genres } }
         if (filter.years.isNotEmpty()) list = list.filter { it.productionYear in filter.years }
+        if (filter.countries.isNotEmpty()) list = list.filter { m ->
+            m.productionLocations.any { com.adultaristocrat.cinema.ui.Countries.key(it) in filter.countries }
+        }
         if (!search.isNullOrBlank()) {
             val q = search.trim().lowercase()
             list = list.filter { m ->

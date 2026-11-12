@@ -22,6 +22,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -136,13 +140,12 @@ fun PersonScreen(state: AppState, route: Route.Person) {
                             Text("Назад", color = AA.TextDim)
                         }
                     }
-                    Row {
-                        // Фото: рамка подстраивается под пропорции снимка (без серых полос).
-                        // Фото можно выбрать пультом — так со списка фильмов всегда можно подняться наверх.
+                    // Фото: рамка подстраивается под пропорции снимка (без серых полос).
+                    // Фото можно выбрать пультом — так со списка фильмов всегда можно подняться наверх.
+                    val photo: @Composable (Modifier) -> Unit = { m ->
                         val photoFv = rememberFocusVisual()
                         Box(
-                            Modifier.width(if (ui.isPhone) 130.dp else 220.dp)
-                                .focusRequester(model.photoFocus)
+                            m.focusRequester(model.photoFocus)
                                 .focusable(interactionSource = photoFv.interaction)
                         ) {
                             AdaptivePhoto(
@@ -154,49 +157,19 @@ fun PersonScreen(state: AppState, route: Route.Person) {
                                 initialsSize = 34.sp,
                             )
                         }
-                        Spacer(Modifier.width(if (ui.isPhone) 14.dp else 24.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(person?.name ?: route.name, style = MaterialTheme.typography.headlineMedium, color = AA.Text)
-                            Spacer(Modifier.height(10.dp))
-                            val born = parseDate(person?.premiereDate)
-                            val died = parseDate(person?.endDate)
-                            val today = parseDate(state.platform.todayIso)
-                            if (born != null) {
-                                val age = ageBetween(born, died ?: today ?: born)
-                                val ageText = if (died == null && age in 1..120) " ($age ${yearsWord(age)})" else ""
-                                InfoLine("Дата рождения", ruDate(born) + ageText)
-                            }
-                            if (died != null) InfoLine("Дата смерти", ruDate(died))
-                            person?.productionLocations?.firstOrNull()?.let { place ->
-                                // Место рождения обычно «Город, Страна» — переводим страну, если знаем
-                                val parts = place.split(",").map { it.trim() }
-                                val c = Countries.find(parts.lastOrNull())
-                                val text = if (c != null) (parts.dropLast(1) + c.ru).joinToString(", ") else place
-                                InfoLine("Место рождения", text)
-                            }
-                            val bio = person?.overview?.replace(Regex("<[^>]*>"), "")?.trim()
-                            if (!bio.isNullOrEmpty()) {
-                                Spacer(Modifier.height(12.dp))
-                                Text("Биография", style = MaterialTheme.typography.titleMedium, color = AA.Text)
-                                Spacer(Modifier.height(4.dp))
-                                val fv = rememberFocusVisual()
-                                Text(
-                                    bio,
-                                    color = Color(0xFFD0D0D0),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    maxLines = if (model.bioExpanded) Int.MAX_VALUE else if (ui.isPhone) 6 else 8,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.clip(RoundedCornerShape(8.dp))
-                                        .background(if (fv.active) AA.Selector else Color.Transparent)
-                                        .clickable(interactionSource = fv.interaction, indication = null) {
-                                            model.bioExpanded = !model.bioExpanded
-                                        }
-                                        .padding(4.dp),
-                                )
-                                if (!model.bioExpanded) {
-                                    Text("Показать полностью", color = AA.RedHover, fontSize = 13.sp, modifier = Modifier.padding(start = 4.dp))
-                                }
-                            }
+                    }
+                    if (ui.isPhone) {
+                        // Телефон: фото по центру сверху, текст ниже на всю ширину
+                        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                            photo(Modifier.width(210.dp))
+                        }
+                        Spacer(Modifier.height(16.dp))
+                        PersonInfo(state, model, route)
+                    } else {
+                        Row {
+                            photo(Modifier.width(220.dp))
+                            Spacer(Modifier.width(24.dp))
+                            Column(Modifier.weight(1f)) { PersonInfo(state, model, route) }
                         }
                     }
                     Spacer(Modifier.height(16.dp))
@@ -208,10 +181,77 @@ fun PersonScreen(state: AppState, route: Route.Person) {
     )
 }
 
+/** Имя, даты, место рождения и биография */
+@Composable
+private fun PersonInfo(state: AppState, model: PersonModel, route: Route.Person) {
+    val ui = LocalUi.current
+    val person = model.person
+    Text(person?.name ?: route.name, style = MaterialTheme.typography.headlineMedium, color = AA.Text)
+    person?.originalTitle?.takeIf { it.isNotBlank() && it != person.name }?.let {
+        Text(it, style = MaterialTheme.typography.titleMedium, color = AA.TextDim)
+    }
+    Spacer(Modifier.height(10.dp))
+    val born = parseDate(person?.premiereDate)
+    val died = parseDate(person?.endDate)
+    val today = parseDate(state.platform.todayIso)
+    if (born != null) {
+        val age = ageBetween(born, died ?: today ?: born)
+        val ageText = if (died == null && age in 1..120) " ($age ${yearsWord(age)})" else ""
+        InfoLine("Дата рождения", ruDate(born) + ageText)
+    }
+    if (died != null) InfoLine("Дата смерти", ruDate(died))
+    person?.productionLocations?.firstOrNull()?.let { place ->
+        // Место рождения обычно «Город, Страна» — переводим страну, если знаем
+        val parts = place.split(",").map { it.trim() }
+        val c = Countries.find(parts.lastOrNull())
+        val text = if (c != null) (parts.dropLast(1) + c.ru).joinToString(", ") else place
+        InfoLine("Место рождения", text)
+    }
+    val bio = person?.overview?.replace(Regex("<[^>]*>"), "")?.trim()
+    if (!bio.isNullOrEmpty()) {
+        Spacer(Modifier.height(12.dp))
+        Text("Биография", style = MaterialTheme.typography.titleMedium, color = AA.Text)
+        Spacer(Modifier.height(4.dp))
+        val collapsedLines = if (ui.isPhone) 6 else 8
+        var overflows by remember(bio) { mutableStateOf(false) }
+        val toggle = { model.bioExpanded = !model.bioExpanded }
+        val fv = rememberFocusVisual()
+        Text(
+            bio,
+            color = Color(0xFFD0D0D0),
+            style = MaterialTheme.typography.bodyMedium,
+            maxLines = if (model.bioExpanded) Int.MAX_VALUE else collapsedLines,
+            overflow = TextOverflow.Ellipsis,
+            onTextLayout = { if (!model.bioExpanded) overflows = it.hasVisualOverflow },
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                .background(if (fv.active) AA.Selector else Color.Transparent)
+                .clickable(interactionSource = fv.interaction, indication = null) { toggle() }
+                .padding(4.dp),
+        )
+        if (overflows || model.bioExpanded) {
+            // Отдельная кнопка — на телефоне по ней удобно попасть пальцем
+            val bfv = rememberFocusVisual()
+            Text(
+                if (model.bioExpanded) "Свернуть" else "Показать полностью",
+                color = AA.RedHover, fontSize = 14.sp,
+                modifier = Modifier.clip(RoundedCornerShape(8.dp))
+                    .background(if (bfv.active) AA.Selector else Color.Transparent)
+                    .clickable(interactionSource = bfv.interaction, indication = null) { toggle() }
+                    .padding(horizontal = 4.dp, vertical = 8.dp),
+            )
+        }
+    }
+}
+
 @Composable
 private fun InfoLine(label: String, value: String) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-        Text("$label: ", color = AA.Text, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-        Text(value, color = AA.TextDim, fontSize = 15.sp)
-    }
+    // Одной строкой с переносом по словам — на узком экране текст не разваливается по слогам
+    Text(
+        buildAnnotatedString {
+            withStyle(SpanStyle(color = AA.Text, fontWeight = FontWeight.Bold)) { append("$label: ") }
+            withStyle(SpanStyle(color = AA.TextDim)) { append(value) }
+        },
+        fontSize = 15.sp,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+    )
 }

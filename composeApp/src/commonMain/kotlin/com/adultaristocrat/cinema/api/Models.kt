@@ -191,6 +191,8 @@ data class ItemFilter(
     val types: Set<String> = emptySet(),        // Movie, Series
     val genres: Set<String> = emptySet(),
     val years: Set<Int> = emptySet(),
+    /** Ключи стран (ISO-код или название в нижнем регистре, см. Countries.key) */
+    val countries: Set<String> = emptySet(),
 ) {
-    val isActive get() = types.isNotEmpty() || genres.isNotEmpty() || years.isNotEmpty()
+    val isActive get() = types.isNotEmpty() || genres.isNotEmpty() || years.isNotEmpty() || countries.isNotEmpty()
 }

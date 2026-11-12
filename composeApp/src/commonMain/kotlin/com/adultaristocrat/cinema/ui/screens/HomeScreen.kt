@@ -28,6 +28,10 @@ import com.adultaristocrat.cinema.AppState
 import com.adultaristocrat.cinema.Route
 import com.adultaristocrat.cinema.api.BaseItem
 import com.adultaristocrat.cinema.api.ItemFilter
+import com.adultaristocrat.cinema.api.ItemsResult
+import com.adultaristocrat.cinema.ui.Countries
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import com.adultaristocrat.cinema.ui.AAChip
 import com.adultaristocrat.cinema.ui.GridModel
 import com.adultaristocrat.cinema.ui.LocalUi
@@ -51,26 +55,60 @@ class HomeModel(private val state: AppState) {
     var collections by mutableStateOf<List<BaseItem>>(emptyList())
     var mode by mutableStateOf<HomeMode>(if (state.offlineMode) HomeMode.Offline else HomeMode.Latest)
     var filter by mutableStateOf(ItemFilter())
-    var genres by mutableStateOf<List<String>?>(null)
+    /** Что реально есть в разделе: жанры, годы, страны (null — загружается) */
+    var facets by mutableStateOf<FilterFacets?>(null)
     var showFilter by mutableStateOf(false)
+
+    // Лёгкий список фильмов текущего раздела — для фильтра по странам и списков годов/стран
+    private val indexLock = Mutex()
+    private var index: List<BaseItem>? = null
+    private var indexMode: HomeMode? = null
+
+    private fun sortOf(m: HomeMode): Pair<String, String> = when (m) {
+        HomeMode.All -> "ProductionYear,PremiereDate,SortName" to "Descending"
+        else -> "DateCreated,SortName" to "Descending"
+    }
+
+    private suspend fun index(): List<BaseItem> = indexLock.withLock {
+        val m = mode
+        index?.takeIf { indexMode == m }?.let { return@withLock it }
+        val (sortBy, order) = sortOf(m)
+        val list = when (m) {
+            HomeMode.Offline -> state.offline.items()
+            HomeMode.All, HomeMode.Latest -> api.facetIndex(null, sortBy, order)
+            is HomeMode.Library -> api.facetIndex(m.id, sortBy, order)
+        }
+        index = list
+        indexMode = m
+        list
+    }
+
+    private fun matches(it: BaseItem, f: ItemFilter): Boolean =
+        (f.genres.isEmpty() || it.genres.any { g -> g in f.genres }) &&
+            (f.years.isEmpty() || it.productionYear in f.years) &&
+            (f.countries.isEmpty() || it.productionLocations.any { c -> Countries.key(c) in f.countries })
 
     val grid = GridModel(state.scope) { start, limit ->
         val f = filter
         val types = f.types.takeIf { it.isNotEmpty() }?.joinToString(",") ?: AppConfig.CONTENT_TYPES
-        when (val m = mode) {
-            HomeMode.All -> api.items(
-                types = types, sortBy = "ProductionYear,PremiereDate,SortName", sortOrder = "Descending",
+        val m = mode
+        val (sortBy, order) = sortOf(m)
+        when {
+            m == HomeMode.Offline -> state.offline.query(f, null, start, limit)
+            // Сервер не умеет фильтровать по странам — отбираем сами, а карточки догружаем по Id
+            f.countries.isNotEmpty() -> {
+                val all = index().filter { matches(it, f) }
+                val page = all.drop(start).take(limit)
+                val loaded = if (page.isEmpty()) emptyList() else api.items(
+                    ids = page.joinToString(",") { it.id }, types = null,
+                    sortBy = sortBy, sortOrder = order, limit = page.size,
+                ).items.associateBy { it.id }
+                ItemsResult(page.mapNotNull { loaded[it.id] }, all.size)
+            }
+            else -> api.items(
+                parentId = (m as? HomeMode.Library)?.id, types = types, sortBy = sortBy, sortOrder = order,
                 genres = f.genres, years = f.years, startIndex = start, limit = limit,
             )
-            HomeMode.Latest -> api.items(
-                types = types, sortBy = "DateCreated,SortName", sortOrder = "Descending",
-                genres = f.genres, years = f.years, startIndex = start, limit = limit,
-            )
-            is HomeMode.Library -> api.items(
-                parentId = m.id, types = types, sortBy = "DateCreated,SortName", sortOrder = "Descending",
-                genres = f.genres, years = f.years, startIndex = start, limit = limit,
-            )
-            HomeMode.Offline -> state.offline.query(f, null, start, limit)
         }
     }
 
@@ -89,15 +127,17 @@ class HomeModel(private val state: AppState) {
     fun select(m: HomeMode) {
         if (m == mode) return
         mode = m
+        facets = null
         grid.reload()
     }
 
     fun openFilter() {
         showFilter = true
-        if (genres == null) state.scope.launch {
-            val server = if (state.offlineMode) emptyList() else runCatching { api.genres() }.getOrDefault(emptyList())
-            val local = if (state.offline.hasMovies) state.offline.items().flatMap { it.genres } else emptyList()
-            genres = (server + local).distinct().sorted()
+        if (facets == null) state.scope.launch {
+            val list = runCatching { index() }.getOrDefault(emptyList())
+            var genres = list.flatMap { it.genres }.distinct().sorted()
+            if (genres.isEmpty() && !state.offlineMode) genres = runCatching { api.genres() }.getOrDefault(emptyList())
+            facets = FilterFacets.from(list, genres)
         }
     }
 
@@ -185,6 +225,6 @@ fun HomeScreen(state: AppState, route: Route.Tab) {
     )
 
     if (model.showFilter) {
-        FilterDialog(model.filter, model.genres, state.platform.currentYear) { model.applyFilter(it) }
+        FilterDialog(model.filter, model.facets) { model.applyFilter(it) }
     }
 }

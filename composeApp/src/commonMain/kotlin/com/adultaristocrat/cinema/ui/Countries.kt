@@ -94,6 +94,14 @@ object Countries {
         m
     }
 
+    /** Единый ключ страны: разные написания одной страны дают один ключ */
+    fun key(name: String): String = find(name)?.iso ?: name.trim().lowercase()
+
+    /** Название для показа по ключу */
+    fun title(key: String, fallback: String): String = index[key]?.ru ?: fallback
+
+    fun byKey(key: String): Country? = index[key]
+
     fun find(name: String?): Country? {
         val key = name?.trim()?.lowercase() ?: return null
         if (key.isEmpty()) return null

@@ -129,6 +129,8 @@ fun PagedGrid(
     api: JellyfinApi,
     onItemClick: (BaseItem) -> Unit,
     modifier: Modifier = Modifier,
+    /** Долгое нажатие на карточку (удержание пальца / OK, правая кнопка мыши) */
+    onItemLongClick: ((BaseItem) -> Unit)? = null,
     wide: Boolean = false,
     emptyText: String = "Здесь пока пусто",
     autoFocus: Boolean = true,
@@ -188,7 +190,10 @@ fun PagedGrid(
                 .onFocusChanged { if (it.isFocused) model.focusIndex = index }
                 .then(if (index == model.focusIndex) Modifier.focusRequester(requester) else Modifier)
             if (wide) WideCard(item, api, onClick = { onItemClick(item) }, modifier = m.padding(4.dp))
-            else PosterCard(item, api, onClick = { onItemClick(item) }, modifier = m, compact = ui.isPhone)
+            else PosterCard(
+                item, api, onClick = { onItemClick(item) }, modifier = m, compact = ui.isPhone,
+                onLongClick = onItemLongClick?.let { f -> { f(item) } },
+            )
         }
         item(span = { GridItemSpan(maxLineSpan) }, key = "footer") {
             when {
