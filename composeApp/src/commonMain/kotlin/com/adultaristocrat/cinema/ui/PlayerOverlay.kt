@@ -87,6 +87,14 @@ import com.adultaristocrat.cinema.ScaleMode
 import androidx.compose.material.icons.rounded.AspectRatio
 import com.adultaristocrat.cinema.ui.screens.formatTime
 import kotlinx.coroutines.delay
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.material.icons.rounded.FastForward
+import androidx.compose.material.icons.rounded.FastRewind
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 
 private enum class Panel { NONE, SCENES, AUDIO, SUBS }
 
@@ -117,6 +125,14 @@ fun PlayerOverlay(
     var scaleMode by remember { mutableStateOf(ScaleMode.FIT) }
     var scaleHint by remember { mutableStateOf<String?>(null) }
 
+    // Сенсорные жесты (телефоны, планшеты): двойное нажатие слева/справа — ±10 с, удержание — перемотка
+    val touch = !ui.isTv && !ui.isDesktop
+    val gestureScope = rememberCoroutineScope()
+    var seekHintSide by remember { mutableStateOf(0) }      // -1 — назад, 1 — вперёд, 0 — нет
+    var seekHintSec by remember { mutableStateOf(0L) }
+    var seekAnchor by remember { mutableStateOf<Long?>(null) }
+    var seekStamp by remember { mutableStateOf(0) }
+
     val rootFocus = remember { FocusRequester() }
     val barFocus = remember { FocusRequester() }
 
@@ -145,6 +161,21 @@ fun PlayerOverlay(
         control?.setScaleMode(next)
         scaleHint = next.title
         activity()
+    }
+
+    /** Шаг перемотки жестом: копим сдвиг от одной точки, чтобы быстрые нажатия складывались */
+    fun gestureSeek(direction: Int) {
+        val c = control ?: return
+        val anchor = seekAnchor ?: pos.also { seekAnchor = it }
+        if (seekHintSide != direction) seekHintSec = 0
+        seekHintSide = direction
+        seekHintSec += 10
+        val target = (anchor + direction * seekHintSec * 1000).coerceIn(0, if (dur > 0) dur - 1000 else Long.MAX_VALUE)
+        // Если упёрлись в начало/конец — дальше не копим
+        if (target == 0L || (dur > 0 && target == dur - 1000)) seekHintSec = kotlin.math.abs(target - anchor) / 1000
+        c.seekTo(target)
+        pos = target
+        seekStamp++
     }
 
     fun currentChapter(): Int = chapters.indexOfLast { it.startMs <= pos + 500 }
@@ -258,8 +289,59 @@ fun PlayerOverlay(
                         }
                     }
                 }
-                .pointerInput(ui.isDesktop) {
-                    detectTapGestures(
+                .pointerInput(touch) {
+                    if (touch) {
+                        // Как в VLC: одно нажатие — кнопки; двойное слева/справа — ±10 с (каждое следующее
+                        // быстрое нажатие — ещё 10 с); двойное с удержанием — перемотка; двойное по центру — пауза
+                        var lastUp = 0L
+                        var lastZone = 0
+                        var seeking = false
+                        var singleJob: Job? = null
+                        awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            val w = size.width.toFloat()
+                            val zone = when {
+                                down.position.x < w * 0.35f -> -1
+                                down.position.x > w * 0.65f -> 1
+                                else -> 0
+                            }
+                            val window = if (seeking) 650L else 320L
+                            val repeat = down.uptimeMillis - lastUp < window && (zone == lastZone || (seeking && zone != 0))
+                            if (repeat) {
+                                singleJob?.cancel()
+                                if (zone == 0) {
+                                    togglePause()
+                                    seeking = false
+                                    lastUp = 0L
+                                    waitForUpOrCancellation()
+                                    return@awaitEachGesture
+                                }
+                                if (panel != Panel.NONE) panel = Panel.NONE
+                                seeking = true
+                                gestureSeek(zone)
+                                // Держим палец — мотаем дальше, пока не отпустим
+                                var up = withTimeoutOrNull(450L) { waitForUpOrCancellation() }
+                                while (up == null && currentEvent.changes.any { it.pressed }) {
+                                    gestureSeek(zone)
+                                    up = withTimeoutOrNull(300L) { waitForUpOrCancellation() }
+                                }
+                                lastUp = up?.uptimeMillis ?: currentEvent.changes.firstOrNull()?.uptimeMillis ?: down.uptimeMillis
+                                lastZone = zone
+                            } else {
+                                seeking = false
+                                val up = waitForUpOrCancellation() ?: return@awaitEachGesture
+                                lastUp = up.uptimeMillis
+                                lastZone = zone
+                                // Ждём: вдруг это первое из двойного нажатия
+                                singleJob?.cancel()
+                                singleJob = gestureScope.launch {
+                                    delay(320L)
+                                    if (panel != Panel.NONE) panel = Panel.NONE
+                                    else if (visible) visible = false else activity()
+                                }
+                            }
+                        }
+                    } else detectTapGestures(
                         onTap = {
                             if (panel != Panel.NONE) panel = Panel.NONE
                             else if (ui.isDesktop) togglePause()
@@ -280,6 +362,36 @@ fun PlayerOverlay(
                 modifier = Modifier.align(Alignment.Center).clip(RoundedCornerShape(14.dp))
                     .background(Color(0xCC000000)).padding(horizontal = 22.dp, vertical = 12.dp),
             )
+        }
+
+        // Подсказка перемотки жестом: «⏪ −20 с» слева или «+20 с ⏩» справа
+        LaunchedEffect(seekStamp) {
+            if (seekStamp > 0) {
+                delay(900)
+                seekHintSide = 0
+                seekHintSec = 0
+                seekAnchor = null
+            }
+        }
+        if (seekHintSide != 0) {
+            Row(
+                Modifier.align(if (seekHintSide < 0) Alignment.CenterStart else Alignment.CenterEnd)
+                    .padding(horizontal = 28.dp)
+                    .clip(RoundedCornerShape(40.dp))
+                    .background(Color(0x99000000))
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (seekHintSide < 0) {
+                    Icon(Icons.Rounded.FastRewind, null, tint = Color.White, modifier = Modifier.size(34.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("−$seekHintSec с", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                } else {
+                    Text("+$seekHintSec с", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.width(8.dp))
+                    Icon(Icons.Rounded.FastForward, null, tint = Color.White, modifier = Modifier.size(34.dp))
+                }
+            }
         }
 
         if (buffering || control == null) {
