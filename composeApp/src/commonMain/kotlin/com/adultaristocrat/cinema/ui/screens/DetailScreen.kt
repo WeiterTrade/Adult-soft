@@ -1,5 +1,9 @@
 package com.adultaristocrat.cinema.ui.screens
 
+import com.adultaristocrat.cinema.ui.FlagImage
+
+import com.adultaristocrat.cinema.TagKind
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -329,32 +333,30 @@ private fun InfoBody(state: AppState, model: DetailModel, item: BaseItem, playFo
     val api = state.api
     val ui = LocalUi.current
 
-    // Год, страна (с флагом), жанры
-    val tags: List<Pair<String, String?>> = buildList {
-        item.yearLabel?.let { add(it to null) }
-        item.productionLocations.take(2).forEach { loc ->
-            val c = Countries.find(loc)
-            add((c?.ru ?: loc) to c?.flagUrl)
-        }
-        item.genres.take(5).forEach { add(it to null) }
-    }
-    if (tags.isNotEmpty()) {
+    // Год, страна (с флагом), жанры. Страну и жанр можно нажать — откроются все такие фильмы.
+    val isOffline = item.id.startsWith("off:")
+    val countries = item.productionLocations.take(2)
+    val genres = item.genres.take(5)
+    if (item.yearLabel != null || countries.isNotEmpty() || genres.isNotEmpty()) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            tags.forEach { (t, flag) ->
+            item.yearLabel?.let { year ->
                 Row(
                     Modifier.clip(RoundedCornerShape(10.dp)).background(AA.SurfaceHigher)
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    if (flag != null) {
-                        AsyncImage(
-                            model = flag, contentDescription = null, contentScale = ContentScale.Crop,
-                            modifier = Modifier.size(width = 20.dp, height = 14.dp).clip(RoundedCornerShape(2.dp)),
-                        )
-                        Spacer(Modifier.width(6.dp))
-                    }
-                    Text(t, color = AA.Text, style = MaterialTheme.typography.labelLarge)
+                    Text(year, color = AA.Text, style = MaterialTheme.typography.labelLarge)
                 }
+            }
+            countries.forEach { loc ->
+                val c = Countries.find(loc)
+                val flag: (@Composable () -> Unit)? = if (c == null) null else { { FlagImage(c) } }
+                AAChip(c?.ru ?: loc, false, {
+                    state.navigate(Route.Tag(TagKind.COUNTRY, loc, c?.ru ?: loc, isOffline))
+                }, leading = flag)
+            }
+            genres.forEach { g ->
+                AAChip(g, false, { state.navigate(Route.Tag(TagKind.GENRE, g, g, isOffline)) })
             }
         }
         Spacer(Modifier.height(14.dp))

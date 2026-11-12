@@ -28,7 +28,11 @@ sealed class Route {
     class Folder(val parentId: String, val title: String) : Route()
     class Person(val personId: String, val name: String) : Route()
     class Player(val itemId: String, val fromStart: Boolean = false, val startMs: Long? = null) : Route()
+    /** Фильмы жанра или страны (нажатие на плашку в карточке фильма) */
+    class Tag(val kind: TagKind, val value: String, val title: String, val offline: Boolean = false) : Route()
 }
+
+enum class TagKind { GENRE, COUNTRY }
 
 class AppState(val platform: Platform) {
     val api = JellyfinApi(platform.deviceName, platform.deviceId)

@@ -155,6 +155,7 @@ private fun RouteContent(state: AppState, route: Route) {
         is Route.Folder -> BrowseScreen(state, route, null, route)
         is Route.Detail -> DetailScreen(state, route)
         is Route.Person -> PersonScreen(state, route)
+        is Route.Tag -> com.adultaristocrat.cinema.ui.screens.TagScreen(state, route)
         is Route.Player -> PlayerScreen(state, route)
     }
 }

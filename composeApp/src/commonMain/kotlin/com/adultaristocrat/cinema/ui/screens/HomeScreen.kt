@@ -1,6 +1,19 @@
 package com.adultaristocrat.cinema.ui.screens
 
 import com.adultaristocrat.cinema.AppConfig
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.rounded.FilterListOff
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextOverflow
+import com.adultaristocrat.cinema.ui.AA
+import com.adultaristocrat.cinema.ui.aaClickable
+import com.adultaristocrat.cinema.ui.rememberFocusVisual
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -193,6 +206,33 @@ fun HomeScreen(state: AppState, route: Route.Tab) {
                     )
                 }
             }
+            // Активный фильтр: что выбрано + кнопка «Сброс» (палец, OK на пульте, левая или правая кнопка мыши)
+            if (model.filter.isActive) {
+                item(span = { GridItemSpan(maxLineSpan) }, key = "filter-summary") {
+                    val f = model.filter
+                    val countryTitles = f.countries.map { k ->
+                        model.facets?.countries?.firstOrNull { it.key == k }?.title ?: Countries.title(k, k)
+                    }
+                    val summary = (f.genres.sorted() + f.years.sortedDescending().map { it.toString() } + countryTitles)
+                        .joinToString("  •  ")
+                    Row(
+                        Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        Text(
+                            summary,
+                            color = AA.Text,
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        ResetChip { model.applyFilter(ItemFilter()) }
+                    }
+                }
+            }
             if (model.collections.isNotEmpty()) {
                 item(span = { GridItemSpan(maxLineSpan) }, key = "collections") {
                     Column {
@@ -227,5 +267,24 @@ fun HomeScreen(state: AppState, route: Route.Tab) {
 
     if (model.showFilter) {
         FilterDialog(model.filter, model.facets) { model.applyFilter(it) }
+    }
+}
+
+/** Кнопка «Сброс» фильтра */
+@Composable
+private fun ResetChip(onReset: () -> Unit) {
+    val fv = rememberFocusVisual()
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (fv.active) AA.Selector else AA.SurfaceHigh)
+            .border(if (fv.active) 2.dp else 1.dp, if (fv.active) AA.Text else AA.Border, RoundedCornerShape(12.dp))
+            .aaClickable(fv, onReset, onReset)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Rounded.FilterListOff, null, tint = AA.Text, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(6.dp))
+        Text("Сброс", color = AA.Text, style = MaterialTheme.typography.labelLarge)
     }
 }
