@@ -436,7 +436,8 @@ fun Modifier.aaClickable(fv: FocusVisual, onClick: () -> Unit, onLongClick: (() 
     if (onLongClick == null) return clickable(interactionSource = fv.interaction, indication = null, onClick = onClick)
     val scope = rememberCoroutineScope()
     val click by rememberUpdatedState(onClick)
-    val long by rememberUpdatedState(onLongClick)
+    val longAction: () -> Unit = onLongClick
+    val long by rememberUpdatedState(longAction)
     val hold = remember { arrayOfNulls<Job>(1) }
     val fired = remember { BooleanArray(1) }
     return this

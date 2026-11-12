@@ -71,9 +71,10 @@ class HomeModel(private val state: AppState) {
 
     private suspend fun index(): List<BaseItem> = indexLock.withLock {
         val m = mode
-        index?.takeIf { indexMode == m }?.let { return@withLock it }
+        val cached = index
+        if (cached != null && indexMode == m) return@withLock cached
         val (sortBy, order) = sortOf(m)
-        val list = when (m) {
+        val list: List<BaseItem> = when (m) {
             HomeMode.Offline -> state.offline.items()
             HomeMode.All, HomeMode.Latest -> api.facetIndex(null, sortBy, order)
             is HomeMode.Library -> api.facetIndex(m.id, sortBy, order)
@@ -83,10 +84,10 @@ class HomeModel(private val state: AppState) {
         list
     }
 
-    private fun matches(it: BaseItem, f: ItemFilter): Boolean =
-        (f.genres.isEmpty() || it.genres.any { g -> g in f.genres }) &&
-            (f.years.isEmpty() || it.productionYear in f.years) &&
-            (f.countries.isEmpty() || it.productionLocations.any { c -> Countries.key(c) in f.countries })
+    private fun matches(item: BaseItem, f: ItemFilter): Boolean =
+        (f.genres.isEmpty() || item.genres.any { g -> g in f.genres }) &&
+            (f.years.isEmpty() || item.productionYear in f.years) &&
+            (f.countries.isEmpty() || item.productionLocations.any { c -> Countries.key(c) in f.countries })
 
     val grid = GridModel(state.scope) { start, limit ->
         val f = filter

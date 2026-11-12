@@ -42,6 +42,7 @@ import com.adultaristocrat.cinema.AppConfig
 import com.adultaristocrat.cinema.AppState
 import com.adultaristocrat.cinema.Route
 import com.adultaristocrat.cinema.api.BaseItem
+import com.adultaristocrat.cinema.api.JellyfinApi
 import com.adultaristocrat.cinema.ui.AA
 import com.adultaristocrat.cinema.ui.Countries
 import com.adultaristocrat.cinema.ui.AdaptivePhoto
@@ -142,32 +143,16 @@ fun PersonScreen(state: AppState, route: Route.Person) {
                     }
                     // Фото: рамка подстраивается под пропорции снимка (без серых полос).
                     // Фото можно выбрать пультом — так со списка фильмов всегда можно подняться наверх.
-                    val photo: @Composable (Modifier) -> Unit = { m ->
-                        val photoFv = rememberFocusVisual()
-                        Box(
-                            m.focusRequester(model.photoFocus)
-                                .focusable(interactionSource = photoFv.interaction)
-                        ) {
-                            AdaptivePhoto(
-                                url = "${api.baseUrl}/Items/${route.personId}/Images/Primary?maxHeight=900&quality=90",
-                                name = route.name,
-                                cornerRadius = 16.dp,
-                                borderWidth = if (photoFv.active) 3.dp else 1.5.dp,
-                                borderColor = if (photoFv.active) AA.Red else AA.BorderDark,
-                                initialsSize = 34.sp,
-                            )
-                        }
-                    }
                     if (ui.isPhone) {
                         // Телефон: фото по центру сверху, текст ниже на всю ширину
                         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                            photo(Modifier.width(210.dp))
+                            PersonPhoto(model, route, api, Modifier.width(210.dp))
                         }
                         Spacer(Modifier.height(16.dp))
                         PersonInfo(state, model, route)
                     } else {
                         Row {
-                            photo(Modifier.width(220.dp))
+                            PersonPhoto(model, route, api, Modifier.width(220.dp))
                             Spacer(Modifier.width(24.dp))
                             Column(Modifier.weight(1f)) { PersonInfo(state, model, route) }
                         }
@@ -181,13 +166,35 @@ fun PersonScreen(state: AppState, route: Route.Person) {
     )
 }
 
+/**
+ * Фото: рамка подстраивается под пропорции снимка (без серых полос).
+ * Фото можно выбрать пультом — так со списка фильмов всегда можно подняться наверх.
+ */
+@Composable
+private fun PersonPhoto(model: PersonModel, route: Route.Person, api: JellyfinApi, modifier: Modifier) {
+    val photoFv = rememberFocusVisual()
+    Box(
+        modifier.focusRequester(model.photoFocus)
+            .focusable(interactionSource = photoFv.interaction)
+    ) {
+        AdaptivePhoto(
+            url = "${api.baseUrl}/Items/${route.personId}/Images/Primary?maxHeight=900&quality=90",
+            name = route.name,
+            cornerRadius = 16.dp,
+            borderWidth = if (photoFv.active) 3.dp else 1.5.dp,
+            borderColor = if (photoFv.active) AA.Red else AA.BorderDark,
+            initialsSize = 34.sp,
+        )
+    }
+}
+
 /** Имя, даты, место рождения и биография */
 @Composable
 private fun PersonInfo(state: AppState, model: PersonModel, route: Route.Person) {
     val ui = LocalUi.current
     val person = model.person
     Text(person?.name ?: route.name, style = MaterialTheme.typography.headlineMedium, color = AA.Text)
-    person?.originalTitle?.takeIf { it.isNotBlank() && it != person.name }?.let {
+    person?.originalTitle?.takeIf { it.isNotBlank() && it != person?.name }?.let {
         Text(it, style = MaterialTheme.typography.titleMedium, color = AA.TextDim)
     }
     Spacer(Modifier.height(10.dp))

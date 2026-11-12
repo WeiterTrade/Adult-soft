@@ -176,6 +176,18 @@ fun FilterDialog(
     }
 }
 
+@Composable
+private fun CountryChip(o: CountryOption, withCount: Boolean, selected: Set<String>, onChange: (Set<String>) -> Unit) {
+    val c = o.country
+    val flag: (@Composable () -> Unit)? = if (c == null) null else { { FlagImage(c) } }
+    AAChip(
+        if (withCount) "${o.title}  ${o.count}" else o.title,
+        o.key in selected,
+        { onChange(toggle(selected, o.key)) },
+        leading = flag,
+    )
+}
+
 /** Выбор стран: поиск, популярные, алфавит и список с флагами */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -187,18 +199,6 @@ private fun CountryPicker(
     var query by remember { mutableStateOf("") }
     var letter by remember { mutableStateOf<String?>(null) }
     val chip = Arrangement.spacedBy(8.dp)
-
-    @Composable
-    fun CountryChip(o: CountryOption, withCount: Boolean) {
-        val c = o.country
-        val flag: (@Composable () -> Unit)? = if (c == null) null else { { FlagImage(c) } }
-        AAChip(
-            if (withCount) "${o.title}  ${o.count}" else o.title,
-            o.key in selected,
-            { onChange(toggle(selected, o.key)) },
-            leading = flag,
-        )
-    }
 
     AATextField(
         value = query,
@@ -216,7 +216,7 @@ private fun CountryPicker(
     if (chosen.isNotEmpty()) {
         FlowRow(horizontalArrangement = chip, verticalArrangement = chip) {
             AAChip("Все страны", false, { onChange(emptySet()) }, icon = Icons.Rounded.Close)
-            chosen.forEach { CountryChip(it, withCount = false) }
+            chosen.forEach { CountryChip(it, false, selected, onChange) }
         }
         Spacer(Modifier.height(10.dp))
     }
@@ -226,7 +226,7 @@ private fun CountryPicker(
         // Популярные — страны, где больше всего фильмов
         Text("Популярные", color = AA.TextDim, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 6.dp))
         FlowRow(horizontalArrangement = chip, verticalArrangement = chip) {
-            options.sortedByDescending { it.count }.take(6).forEach { CountryChip(it, withCount = true) }
+            options.sortedByDescending { it.count }.take(6).forEach { CountryChip(it, true, selected, onChange) }
         }
         Spacer(Modifier.height(10.dp))
     }
@@ -248,7 +248,7 @@ private fun CountryPicker(
         Text("Ничего не найдено", color = AA.TextDim)
     } else {
         FlowRow(horizontalArrangement = chip, verticalArrangement = chip) {
-            list.forEach { CountryChip(it, withCount = true) }
+            list.forEach { CountryChip(it, true, selected, onChange) }
         }
     }
 }
