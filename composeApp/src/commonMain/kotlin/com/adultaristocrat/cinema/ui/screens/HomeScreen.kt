@@ -100,7 +100,7 @@ class HomeModel(private val state: AppState) {
             f.countries.isNotEmpty() -> {
                 val all = index().filter { matches(it, f) }
                 val page = all.drop(start).take(limit)
-                val loaded = if (page.isEmpty()) emptyList() else api.items(
+                val loaded: Map<String, BaseItem> = if (page.isEmpty()) emptyMap() else api.items(
                     ids = page.joinToString(",") { it.id }, types = null,
                     sortBy = sortBy, sortOrder = order, limit = page.size,
                 ).items.associateBy { it.id }
