@@ -28,4 +28,13 @@ class MainActivity : ComponentActivity() {
 
         setContent { App(appState) }
     }
+
+    // Свернули приложение (кнопка «Домой», «Недавние», выключили экран) —
+    // фильм останавливается и закрывается, чтобы звук не играл в фоне.
+    override fun onStop() {
+        super.onStop()
+        if (isChangingConfigurations) return
+        ActivePlayer.stop?.invoke()
+        appState.leavePlayerOnBackground()
+    }
 }

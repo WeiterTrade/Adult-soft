@@ -250,6 +250,18 @@ class AppState(val platform: Platform) {
         }
     }
 
+    /**
+     * Приложение свернули / убрали с экрана во время фильма:
+     * останавливаем видео (место просмотра сохраняется) и возвращаемся на главную.
+     */
+    fun leavePlayerOnBackground() {
+        val players = stack.filterIsInstance<Route.Player>()
+        if (players.isEmpty()) return
+        // Сразу сообщаем серверу место остановки (экран плеера закроется при следующей перерисовке)
+        players.forEach { (models[it] as? com.adultaristocrat.cinema.ui.screens.PlayerModel)?.stop() }
+        openTab(AppTab.HOME)
+    }
+
     fun openTab(tab: AppTab) {
         if (tab == AppTab.CONTINUE) {
             continueLast()

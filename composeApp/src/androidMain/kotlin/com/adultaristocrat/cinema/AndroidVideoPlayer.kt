@@ -176,7 +176,10 @@ fun AndroidVideoSurface(
         }
         player.addListener(listener)
         onControl(ExoControl(player) { scale = it })
+        // Свернули приложение — MainActivity сразу глушит плеер (не ждём перерисовки экрана)
+        ActivePlayer.stop = { runCatching { player.pause(); player.stop() } }
         onDispose {
+            ActivePlayer.stop = null
             onControl(null)
             player.removeListener(listener)
             player.release()
@@ -205,4 +208,9 @@ fun AndroidVideoSurface(
         },
         modifier = modifier,
     )
+}
+
+/** Текущий плеер — чтобы остановить его, когда приложение свернули */
+object ActivePlayer {
+    @Volatile var stop: (() -> Unit)? = null
 }

@@ -28,6 +28,7 @@ import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -125,6 +126,17 @@ fun main() {
                 }
             },
         ) {
+            // Свернули окно во время фильма — сразу ставим VLC на паузу и уходим на главную
+            DisposableEffect(Unit) {
+                val l = object : java.awt.event.WindowAdapter() {
+                    override fun windowIconified(e: java.awt.event.WindowEvent?) {
+                        ActiveVlc.pause?.invoke()
+                        appState.leavePlayerOnBackground()
+                    }
+                }
+                window.addWindowListener(l)
+                onDispose { window.removeWindowListener(l) }
+            }
             LaunchedEffect(Unit) {
                 window.minimumSize = Dimension(900, 560)
                 // Всегда открываемся развёрнутыми на весь экран (без перекрытия панели задач)

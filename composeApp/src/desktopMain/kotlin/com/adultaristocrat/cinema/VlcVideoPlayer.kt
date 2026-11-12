@@ -198,7 +198,9 @@ fun VlcVideoSurface(
         if (startSec > 1) player.media().play(request.url, ":start-time=$startSec", ":input-fast-seek")
         else player.media().play(request.url, ":input-fast-seek")
         onControl(control)
+        ActiveVlc.pause = { runCatching { player.controls().setPause(true) } }
         onDispose {
+            ActiveVlc.pause = null
             onControl(null)
             player.events().removeMediaPlayerEventListener(listener)
             thread(isDaemon = true) {
@@ -222,4 +224,9 @@ fun VlcVideoSurface(
             )
         }
     }
+}
+
+/** Текущий плеер — чтобы поставить его на паузу, когда окно свернули */
+object ActiveVlc {
+    @Volatile var pause: (() -> Unit)? = null
 }
