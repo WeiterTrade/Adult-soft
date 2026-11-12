@@ -191,6 +191,8 @@ fun VlcVideoSurface(
             }
         }
         player.events().addMediaPlayerEventListener(listener)
+        // Музыка и видео в других программах — на паузу, чтобы не играли поверх фильма
+        OtherMedia.pauseAll()
         val startSec = request.startPositionMs / 1000.0
         // input-fast-seek: перемотка к ближайшему ключевому кадру — сцены переключаются быстрее
         if (startSec > 1) player.media().play(request.url, ":start-time=$startSec", ":input-fast-seek")

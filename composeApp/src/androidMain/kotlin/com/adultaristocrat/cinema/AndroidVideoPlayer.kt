@@ -125,6 +125,16 @@ fun AndroidVideoSurface(
             .build()
         ExoPlayer.Builder(context, renderers)
             .setLoadControl(loadControl)
+            // Захват аудиофокуса: музыка и видео в других приложениях ставятся на паузу (как в YouTube, VLC)
+            .setAudioAttributes(
+                androidx.media3.common.AudioAttributes.Builder()
+                    .setUsage(androidx.media3.common.C.USAGE_MEDIA)
+                    .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MOVIE)
+                    .build(),
+                /* handleAudioFocus = */ true,
+            )
+            // Выдернули наушники / отключился Bluetooth — пауза, чтобы звук не пошёл в динамик
+            .setHandleAudioBecomingNoisy(true)
             .build()
             .apply {
                 setMediaItem(MediaItem.fromUri(request.url), request.startPositionMs)
