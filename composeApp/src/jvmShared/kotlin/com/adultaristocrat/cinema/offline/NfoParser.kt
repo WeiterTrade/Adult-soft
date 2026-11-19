@@ -70,7 +70,7 @@ class Nfo internal constructor(private val top: String, private val full: String
             return s.trim()
         }
 
-        private fun decode(bytes: ByteArray): String {
+        fun decode(bytes: ByteArray): String {
             if (bytes.size >= 3 && bytes[0] == 0xEF.toByte() && bytes[1] == 0xBB.toByte() && bytes[2] == 0xBF.toByte()) {
                 return String(bytes, 3, bytes.size - 3, Charsets.UTF_8)
             }

@@ -45,6 +45,10 @@ class AppState(val platform: Platform) {
     /** Фильмы из сетевых папок (без сервера) */
     val offline = com.adultaristocrat.cinema.offline.OfflineLibrary(platform, scope)
 
+    /** Скачивание библиотеки на компьютер (только ПК) */
+    val downloads by lazy { com.adultaristocrat.cinema.download.LibraryDownloader(this) }
+    var showDownloads by mutableStateOf(false)
+
     /** Офлайн-режим: вход без сервера, только офлайн-библиотека */
     var offlineMode by mutableStateOf(false)
         private set

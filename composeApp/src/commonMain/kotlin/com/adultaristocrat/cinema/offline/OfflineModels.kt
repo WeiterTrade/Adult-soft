@@ -10,9 +10,14 @@ data class OfflineSource(
     val path: String = "",
     val user: String = "",
     val password: String = "",
+    /** Папка на этом компьютере (например, скачанная библиотека). Тогда host/share не используются */
+    val localPath: String = "",
 ) {
-    val title: String get() = "\\\\$host\\$share" + (if (path.isNotBlank()) "\\" + path.trim('/').replace('/', '\\') else "")
-    val smbUrl: String get() = "smb://$host/$share/" + (if (path.isNotBlank()) path.trim('/') + "/" else "")
+    val isLocal: Boolean get() = localPath.isNotBlank()
+    val title: String get() = if (isLocal) localPath
+        else "\\\\$host\\$share" + (if (path.isNotBlank()) "\\" + path.trim('/').replace('/', '\\') else "")
+    val smbUrl: String get() = if (isLocal) "local:" + localPath
+        else "smb://$host/$share/" + (if (path.isNotBlank()) path.trim('/') + "/" else "")
 }
 
 /** Сцена (глава MKV), прочитанная прямо из файла */
@@ -51,6 +56,21 @@ data class OfflineMovie(
     val order: Int = 0,
 )
 
+/** Биография из папки .bio (файл «Имя_Фамилия.txt») */
+@Serializable
+data class OfflineBio(
+    val name: String,
+    val text: String? = null,
+    val realName: String? = null,
+    val aliases: List<String> = emptyList(),
+    /** ISO: 1981-09-21 (или только год) */
+    val birthDate: String? = null,
+    val deathDate: String? = null,
+    val birthPlace: String? = null,
+    /** Остальные пункты «Краткой справки»: рост, жанры, достижения… */
+    val facts: List<List<String>> = emptyList(),
+)
+
 @Serializable
 data class OfflineState(
     val enabled: Boolean = false,
@@ -60,6 +80,8 @@ data class OfflineState(
     val movies: List<OfflineMovie> = emptyList(),
     /** id → позиция в мс; отрицательное — просмотрено */
     val positions: Map<String, Long> = emptyMap(),
+    /** Биографии: нормализованное имя → биография */
+    val bios: Map<String, OfflineBio> = emptyMap(),
     val lastScan: String? = null,
 )
 
@@ -79,9 +101,18 @@ interface OfflineEngine {
     /** Рекурсивное сканирование папок: видео + nfo + картинки */
     suspend fun scan(sources: List<OfflineSource>, onProgress: (folder: String, found: Int) -> Unit): List<OfflineMovie>
 
+    /** Биографии из папок .bio внутри источников */
+    suspend fun scanBios(sources: List<OfflineSource>): List<OfflineBio> = emptyList()
+
     /** Сообщить пароли к папкам (для воспроизведения и картинок) */
     fun setSources(sources: List<OfflineSource>)
 
     /** http-адрес файла через встроенный локальный сервер (плееры и картинки) */
     fun fileUrl(smbPath: String): String
+
+    /** Картинка сцены: кадр из видео в момент [ms] (делается один раз и запоминается) */
+    fun sceneThumbUrl(videoSmbPath: String, ms: Long): String? = null
+
+    /** Стандартная картинка для режиссёра без фото */
+    fun directorPhotoUrl(): String? = null
 }

@@ -90,6 +90,12 @@ interface Platform {
     /** Офлайн-библиотека в сетевых папках (SMB) */
     val offlineEngine: com.adultaristocrat.cinema.offline.OfflineEngine? get() = null
 
+    /** ПК: работа с файлами на компьютере — скачивание библиотеки (null — не поддерживается) */
+    val fileStore: LocalFileStore? get() = null
+
+    /** ПК: выбор папки на компьютере (null — отменено или не поддерживается) */
+    suspend fun pickFolder(title: String): String? = null
+
     /** Файлы в личной папке приложения (офлайн-библиотека и т.п.) */
     fun readFile(name: String): String? = null
     fun writeFile(name: String, text: String) {}
@@ -118,3 +124,20 @@ interface Platform {
         modifier: Modifier,
     )
 }
+
+/** Файлы на компьютере (Windows, Linux) — для скачивания библиотеки */
+interface LocalFileStore {
+    /** Склеить путь из частей (разделитель системы) */
+    fun join(vararg parts: String): String
+    /** Размер файла или -1, если его нет */
+    fun size(path: String): Long
+    fun writeText(path: String, text: String)
+    /**
+     * Скачать файл (докачка с места обрыва через «.part»).
+     * Ошибка HTTP — исключение [HttpStatusError].
+     */
+    suspend fun download(url: String, path: String, onProgress: (done: Long, total: Long) -> Unit)
+    fun openFolder(path: String)
+}
+
+class HttpStatusError(val code: Int) : Exception("HTTP $code")

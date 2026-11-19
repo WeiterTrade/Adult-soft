@@ -50,10 +50,43 @@ class JvmOfflineEngine : OfflineEngine {
     /** host → учётные данные */
     private val creds = ConcurrentHashMap<String, Pair<String, String>>()
 
+    /**
+     * Папки без пароля: Windows с отключённым «доступом с парольной защитой» пускает
+     * то гостем, то анонимно, то как пользователя «Guest». Пробуем все варианты и запоминаем рабочий.
+     */
+    private val guestMode = ConcurrentHashMap<String, Int>()
+    private val guestContexts: List<CIFSContext> by lazy {
+        listOf(
+            baseContext.withGuestCrendentials(),
+            baseContext.withAnonymousCredentials(),
+            baseContext.withCredentials(NtlmPasswordAuthenticator("", "Guest", "")),
+        )
+    }
+
+    /** Выполнить действие с подходящим входом: для папок без пароля — перебор гостевых вариантов */
+    private fun <T> withAuth(host: String, user: String?, password: String?, block: (CIFSContext) -> T): T {
+        val u = user ?: creds[host.lowercase()]?.first ?: ""
+        if (u.isNotBlank()) return block(ctx(host, user, password))
+        val key = host.lowercase()
+        val first = guestMode[key] ?: 0
+        val order = listOf(first) + guestContexts.indices.filter { it != first }
+        var last: Throwable? = null
+        for (i in order) {
+            try {
+                val r = block(guestContexts[i])
+                guestMode[key] = i
+                return r
+            } catch (t: Throwable) {
+                last = t
+            }
+        }
+        throw last ?: IllegalStateException("Нет доступа")
+    }
+
     private fun ctx(host: String, user: String? = null, password: String? = null): CIFSContext {
         val u = user ?: creds[host.lowercase()]?.first ?: ""
         val pw = password ?: creds[host.lowercase()]?.second ?: ""
-        return if (u.isBlank()) baseContext.withGuestCrendentials()
+        return if (u.isBlank()) guestContexts[guestMode[host.lowercase()] ?: 0]
         else {
             // Поддержка «ДОМЕН\пользователь»
             val domain = if (u.contains("\\")) u.substringBefore("\\") else null
@@ -110,7 +143,7 @@ class JvmOfflineEngine : OfflineEngine {
 
     override suspend fun listShares(host: String, user: String, password: String): List<String> = withContext(Dispatchers.IO) {
         creds[host.lowercase()] = user to password
-        SmbFile("smb://$host/", ctx(host, user, password)).listFiles()
+        withAuth(host, user, password) { c -> SmbFile("smb://$host/", c).listFiles() }
             .map { it.name.trimEnd('/') }
             .filter { !it.endsWith("$") }
             .sorted()
@@ -118,7 +151,7 @@ class JvmOfflineEngine : OfflineEngine {
 
     override suspend fun listDirs(source: OfflineSource): List<String> = withContext(Dispatchers.IO) {
         creds[source.host.lowercase()] = source.user to source.password
-        SmbFile(source.smbUrl, ctx(source.host, source.user, source.password)).listFiles()
+        withAuth(source.host, source.user, source.password) { c -> SmbFile(source.smbUrl, c).listFiles() }
             .filter { it.name.endsWith("/") && !it.name.startsWith(".") }
             .map { it.name.trimEnd('/') }
             .sortedBy { it.lowercase() }
@@ -136,17 +169,49 @@ class JvmOfflineEngine : OfflineEngine {
         setSources(sources)
         val out = mutableListOf<OfflineMovie>()
         for (src in sources) {
-            val root = SmbFile(src.smbUrl, ctx(src.host, src.user, src.password))
-            walk(root, 0, out, onProgress)
+            walk(rootOf(src), 0, out, onProgress)
         }
         out
     }
 
-    private suspend fun walk(dir: SmbFile, depth: Int, out: MutableList<OfflineMovie>, onProgress: (String, Int) -> Unit) {
+    /** Папки .bio: в корне источника и на 1–2 уровня ниже (например, в папке студии) */
+    override suspend fun scanBios(sources: List<OfflineSource>): List<OfflineBio> = withContext(Dispatchers.IO) {
+        val out = LinkedHashMap<String, OfflineBio>()
+        fun look(dir: VFile, depth: Int) {
+            val files = runCatching { dir.listFiles().toList() }.getOrElse { return }
+            files.firstOrNull { it.name.equals(".bio/", ignoreCase = true) }?.let { bioDir ->
+                runCatching { bioDir.listFiles().toList() }.getOrDefault(emptyList())
+                    .filter { f -> f.name.lowercase().let { it.endsWith(".txt") || it.endsWith(".md") } }
+                    .forEach { f ->
+                        runCatching {
+                            val text = Nfo.decode(f.readBytes())
+                            BioParser.parse(f.name, text)
+                        }.getOrNull()?.let { out[it.name.lowercase()] = it }
+                    }
+            }
+            if (depth < 2) files.filter { it.name.endsWith("/") && !it.name.startsWith(".") }.forEach { look(it, depth + 1) }
+        }
+        for (src in sources) runCatching { look(rootOf(src), 0) }
+        out.values.toList()
+    }
+
+    /** Корень источника: сетевая папка (SMB) или папка на этом компьютере */
+    private fun rootOf(src: OfflineSource): VFile =
+        if (src.isLocal) LocalVFile(java.io.File(src.localPath))
+        else runCatching {
+            withAuth(src.host, src.user, src.password) { c -> SmbVFile(SmbFile(src.smbUrl, c)).also { it.listFiles() } }
+        }.getOrElse { SmbVFile(SmbFile(src.smbUrl, ctx(src.host, src.user, src.password))) }
+
+    /** Файл по сохранённому пути (smb://… или local:…) */
+    private fun openPath(path: String): VFile =
+        if (path.startsWith(LocalVFile.PREFIX)) LocalVFile(java.io.File(path.removePrefix(LocalVFile.PREFIX)))
+        else withAuth(hostOf(path), null, null) { c -> SmbVFile(SmbFile(path, c)).also { it.length() } }
+
+    private suspend fun walk(dir: VFile, depth: Int, out: MutableList<OfflineMovie>, onProgress: (String, Int) -> Unit) {
         if (depth > 12) return
         coroutineContext.ensureActive()
         val files = runCatching { dir.listFiles().toList() }.getOrElse { return }
-        onProgress(dir.path.removePrefix("smb://"), out.size)
+        onProgress(dir.path.removePrefix("smb://").removePrefix(LocalVFile.PREFIX), out.size)
 
         val videos = files.filter { f ->
             val n = f.name.lowercase()
@@ -161,9 +226,9 @@ class JvmOfflineEngine : OfflineEngine {
         }
     }
 
-    private fun buildMovie(video: SmbFile, files: List<SmbFile>, order: Int): OfflineMovie {
+    private fun buildMovie(video: VFile, files: List<VFile>, order: Int): OfflineMovie {
         val base = video.name.substringBeforeLast('.')
-        fun find(vararg names: String): SmbFile? =
+        fun find(vararg names: String): VFile? =
             names.firstNotNullOfOrNull { want -> files.firstOrNull { it.name.equals(want, ignoreCase = true) } }
 
         val videosHere = files.count { f ->
@@ -221,15 +286,16 @@ class JvmOfflineEngine : OfflineEngine {
             actors = nfo?.actors()?.takeIf { it.isNotEmpty() }?.map { (n, role, thumb) -> OfflineActor(n, role, actorThumb(n, thumb)) }
                 ?: actorPics.keys.map { OfflineActor(it.replace('_', ' ').replaceFirstChar { c -> c.uppercase() }, null, actorPics[it]) },
             directors = nfo?.list("director").orEmpty(),
-            chapters = if (video.name.lowercase().endsWith(".mkv")) readChapters(video) else emptyList(),
+            chapters = (if (video.name.lowercase().endsWith(".mkv")) readChapters(video) else emptyList())
+                .ifEmpty { find("$base.chapters.xml", "chapters.xml")?.let { readChaptersXml(it) }.orEmpty() },
             order = order,
         )
     }
 
     /** Сцены из глав MKV — читается только заголовок файла */
-    private fun readChapters(f: SmbFile): List<OfflineChapter> = runCatching {
+    private fun readChapters(f: VFile): List<OfflineChapter> = runCatching {
         val len = f.length()
-        SmbRandomAccessFile(f, "r").use { raf ->
+        f.openRandom().use { raf ->
             MkvChapters.read({ pos, buf ->
                 raf.seek(pos)
                 raf.read(buf, 0, buf.size)
@@ -237,8 +303,23 @@ class JvmOfflineEngine : OfflineEngine {
         }
     }.getOrDefault(emptyList())
 
-    private fun readNfo(f: SmbFile): Nfo? {
-        val bytes = f.inputStream.use { it.readBytes() }
+    /** Сцены из файла Matroska XML рядом с видео (скачанные в уменьшенном качестве) */
+    private fun readChaptersXml(f: VFile): List<OfflineChapter> = runCatching {
+        val text = Nfo.decode(f.readBytes())
+        val flags = setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+        Regex("<ChapterAtom>(.*?)</ChapterAtom>", flags).findAll(text).mapNotNull { m ->
+            val atom = m.groupValues[1]
+            val t = Regex("<ChapterTimeStart>\\s*(\\d+):(\\d+):(\\d+)(?:\\.(\\d+))?\\s*</ChapterTimeStart>", flags).find(atom)
+                ?: return@mapNotNull null
+            val (h, mi, s, frac) = t.destructured
+            val ms = (h.toLong() * 3600 + mi.toLong() * 60 + s.toLong()) * 1000 + frac.padEnd(3, '0').take(3).toLong()
+            val name = Regex("<ChapterString>(.*?)</ChapterString>", flags).find(atom)?.groupValues?.get(1)?.let { Nfo.clean(it) }
+            OfflineChapter(name ?: "", ms)
+        }.toList()
+    }.getOrDefault(emptyList())
+
+    private fun readNfo(f: VFile): Nfo? {
+        val bytes = f.readBytes()
         return Nfo.parse(bytes)
     }
 
@@ -256,6 +337,45 @@ class JvmOfflineEngine : OfflineEngine {
             }
         }
         s
+    }
+
+    /** Платформа даёт «снимок кадра»: Android — MediaMetadataRetriever, ПК — VLC. Возвращает JPEG. */
+    var frameGrabber: ((url: String, ms: Long) -> ByteArray?)? = null
+
+    /** Картинка «Фотографии режиссёров не добавляются» из ресурсов приложения */
+    var directorImage: (() -> ByteArray?)? = null
+
+    private val thumbDir: java.io.File by lazy {
+        java.io.File(System.getProperty("java.io.tmpdir") ?: ".", "aa-scene-thumbs").also { it.mkdirs() }
+    }
+    private val thumbLock = Any()
+    private val thumbFailed = ConcurrentHashMap.newKeySet<String>()
+
+    override fun sceneThumbUrl(videoSmbPath: String, ms: Long): String? {
+        if (frameGrabber == null) return null
+        return "http://127.0.0.1:${server.localPort}/t/$key.jpg?ms=$ms&u=" + URLEncoder.encode(videoSmbPath, "UTF-8")
+    }
+
+    override fun directorPhotoUrl(): String? =
+        if (directorImage == null) null else "http://127.0.0.1:${server.localPort}/d/$key.jpg"
+
+    /** Кадр сцены: берём из кэша или делаем один раз (по одному за раз, чтобы не перегружать устройство) */
+    private fun sceneThumb(videoSmb: String, ms: Long): ByteArray? {
+        val name = Integer.toHexString(videoSmb.hashCode()) + "_" + videoSmb.length + "_" + ms + ".jpg"
+        val f = java.io.File(thumbDir, name)
+        if (f.length() > 0) return runCatching { f.readBytes() }.getOrNull()
+        if (name in thumbFailed) return null
+        val grab = frameGrabber ?: return null
+        synchronized(thumbLock) {
+            if (f.length() > 0) return runCatching { f.readBytes() }.getOrNull()
+            val bytes = runCatching { grab(fileUrl(videoSmb), ms) }.getOrNull()
+            if (bytes == null || bytes.isEmpty()) {
+                thumbFailed += name
+                return null
+            }
+            runCatching { f.writeBytes(bytes) }
+            return bytes
+        }
     }
 
     override fun fileUrl(smbPath: String): String {
@@ -308,13 +428,29 @@ class JvmOfflineEngine : OfflineEngine {
             out.flush()
         }
 
+        fun sendBytes(bytes: ByteArray, type: String) {
+            out.write("HTTP/1.1 200 OK\r\nContent-Type: $type\r\nContent-Length: ${bytes.size}\r\nCache-Control: max-age=86400\r\nConnection: close\r\n\r\n".toByteArray())
+            if (!method.equals("HEAD", ignoreCase = true)) out.write(bytes)
+            out.flush()
+        }
+        if (target.startsWith("/d/$key")) {
+            val b = runCatching { directorImage?.invoke() }.getOrNull() ?: return fail(404, "Not Found")
+            return sendBytes(b, "image/jpeg")
+        }
+        if (target.startsWith("/t/$key")) {
+            val q = target.substringAfter('?', "").split("&")
+            val video = q.firstOrNull { it.startsWith("u=") }?.let { URLDecoder.decode(it.substring(2), "UTF-8") } ?: return fail(400, "Bad Request")
+            val ms = q.firstOrNull { it.startsWith("ms=") }?.substring(3)?.toLongOrNull() ?: 0L
+            val b = sceneThumb(video, ms) ?: return fail(404, "Not Found")
+            return sendBytes(b, "image/jpeg")
+        }
         if (!target.startsWith("/f/$key")) return fail(403, "Forbidden")
         val query = target.substringAfter('?', "")
         val smb = query.split("&").firstOrNull { it.startsWith("u=") }?.let { URLDecoder.decode(it.substring(2), "UTF-8") }
             ?: return fail(400, "Bad Request")
 
-        val file = SmbFile(smb, ctx(hostOf(smb)))
-        val length = runCatching { file.length() }.getOrElse { return fail(404, "Not Found") }
+        val (file, length) = runCatching { openPath(smb).let { f -> f to f.length() } }
+            .getOrElse { return fail(404, "Not Found") }
         var start = 0L
         var end = length - 1
         val range = headers["range"]
@@ -350,7 +486,7 @@ class JvmOfflineEngine : OfflineEngine {
             out.flush()
             return
         }
-        SmbRandomAccessFile(file, "r").use { raf ->
+        file.openRandom().use { raf ->
             raf.seek(start)
             val buf = ByteArray(256 * 1024)
             var left = count
@@ -362,5 +498,58 @@ class JvmOfflineEngine : OfflineEngine {
             }
         }
         out.flush()
+    }
+}
+
+// ---------------- Файлы: сетевые (SMB) и на этом компьютере ----------------
+
+internal interface VRandom : java.io.Closeable {
+    fun seek(pos: Long)
+    fun read(b: ByteArray, off: Int, len: Int): Int
+}
+
+/** Файл или папка. У папок имя оканчивается на «/» (как в jcifs) */
+internal interface VFile {
+    val name: String
+    val path: String
+    fun listFiles(): List<VFile>
+    fun length(): Long
+    fun readBytes(): ByteArray
+    fun openRandom(): VRandom
+}
+
+internal class SmbVFile(private val f: SmbFile) : VFile {
+    override val name: String get() = f.name
+    override val path: String get() = f.path
+    override fun listFiles(): List<VFile> = f.listFiles().map { SmbVFile(it) }
+    override fun length(): Long = f.length()
+    override fun readBytes(): ByteArray = f.inputStream.use { it.readBytes() }
+    override fun openRandom(): VRandom {
+        val r = SmbRandomAccessFile(f, "r")
+        return object : VRandom {
+            override fun seek(pos: Long) = r.seek(pos)
+            override fun read(b: ByteArray, off: Int, len: Int): Int = r.read(b, off, len)
+            override fun close() = r.close()
+        }
+    }
+}
+
+internal class LocalVFile(private val f: java.io.File) : VFile {
+    override val name: String get() = if (f.isDirectory) f.name + "/" else f.name
+    override val path: String get() = PREFIX + f.absolutePath
+    override fun listFiles(): List<VFile> = (f.listFiles() ?: emptyArray()).map { LocalVFile(it) }
+    override fun length(): Long = if (f.exists()) f.length() else throw java.io.FileNotFoundException(f.path)
+    override fun readBytes(): ByteArray = f.readBytes()
+    override fun openRandom(): VRandom {
+        val r = java.io.RandomAccessFile(f, "r")
+        return object : VRandom {
+            override fun seek(pos: Long) = r.seek(pos)
+            override fun read(b: ByteArray, off: Int, len: Int): Int = r.read(b, off, len)
+            override fun close() = r.close()
+        }
+    }
+
+    companion object {
+        const val PREFIX = "local:"
     }
 }

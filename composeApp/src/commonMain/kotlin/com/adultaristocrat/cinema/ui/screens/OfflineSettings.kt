@@ -145,6 +145,18 @@ fun OfflineSettings(state: AppState) {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         AAButton("По IP-адресу", Icons.Rounded.Add, { addHost = "" }, primary = false)
                         AAButton("Найти в сети", Icons.Rounded.Wifi, { discovering = true }, primary = false)
+                        // ПК: папка на этом компьютере (например, скачанная библиотека)
+                        if (state.platform.fileStore != null) {
+                            val pickScope = rememberCoroutineScope()
+                            AAButton("Папка на компьютере", Icons.Rounded.Folder, {
+                                pickScope.launch {
+                                    state.platform.pickFolder("Папка с фильмами")?.let { path ->
+                                        lib.addSource(com.adultaristocrat.cinema.offline.OfflineSource(host = "", share = "", localPath = path))
+                                        state.showToast("Папка добавлена. Нажмите «Сканировать папки».")
+                                    }
+                                }
+                            }, primary = false)
+                        }
                     }
 
                     if (st.sources.isNotEmpty()) {
@@ -325,8 +337,13 @@ private fun AddSourceDialog(state: AppState, initialHost: String, onClose: () ->
     val engine = state.offline.engine ?: return
     val scope = rememberCoroutineScope()
     var host by remember { mutableStateOf(initialHost) }
-    var user by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
+    // Логин и пароль к этому компьютеру уже вводили — подставляем (вводить второй раз не нужно)
+    val known = remember(initialHost) {
+        state.offline.state.sources.firstOrNull { it.host.equals(initialHost.trim(), ignoreCase = true) }
+    }
+    var user by remember { mutableStateOf(known?.user ?: "") }
+    var password by remember { mutableStateOf(known?.password ?: "") }
+    var askLogin by remember { mutableStateOf(initialHost.isBlank()) }
     var shares by remember { mutableStateOf<List<String>?>(null) }
     var share by remember { mutableStateOf<String?>(null) }
     var path by remember { mutableStateOf("") }
@@ -360,11 +377,18 @@ private fun AddSourceDialog(state: AppState, initialHost: String, onClose: () ->
             try {
                 shares = engine.listShares(host.trim(), user.trim(), password)
             } catch (e: Exception) {
-                error = "Нет доступа: ${e.message ?: e}\nПроверьте IP, логин и пароль (для папок без пароля оставьте поля пустыми)."
+                askLogin = true
+                error = if (user.isBlank()) "Без пароля войти не получилось — введите логин и пароль от этого компьютера."
+                else "Нет доступа. Проверьте логин и пароль."
             } finally {
                 busy = false
             }
         }
+    }
+
+    // Компьютер выбран из найденных в сети — сразу пробуем войти без пароля (или с сохранённым)
+    LaunchedEffect(Unit) {
+        if (initialHost.isNotBlank()) connect()
     }
 
     DialogFrame(if (share == null) "Подключение к компьютеру" else "Выберите папку", onClose) {
@@ -376,17 +400,24 @@ private fun AddSourceDialog(state: AppState, initialHost: String, onClose: () ->
                     colors = aaFieldColors(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                     modifier = Modifier.fillMaxWidth(),
                 )
-                AATextField(
+                if (!askLogin && busy) Text("Подключение к \\\\$host…", color = AA.TextDim)
+                if (askLogin) AATextField(
                     value = user, onValueChange = { user = it }, singleLine = true,
                     label = { Text("Пользователь (если нужен)") }, colors = aaFieldColors(), modifier = Modifier.fillMaxWidth(),
                 )
-                AATextField(
+                if (askLogin) AATextField(
                     value = password, onValueChange = { password = it }, singleLine = true,
                     label = { Text("Пароль (если нужен)") }, visualTransformation = PasswordVisualTransformation(),
                     colors = aaFieldColors(), modifier = Modifier.fillMaxWidth(),
                 )
                 if (busy) CircularProgressIndicator(color = AA.Red)
-                else AAButton("Показать общие папки", Icons.Rounded.Check, { connect() })
+                else {
+                    AAButton("Показать общие папки", Icons.Rounded.Check, { connect() })
+                    if (!askLogin) Text(
+                        "Нужен пароль?", color = AA.RedHover,
+                        modifier = Modifier.clickable { askLogin = true }.padding(4.dp),
+                    )
+                }
             } else if (share == null) {
                 Text("\\\\$host", color = AA.TextDim)
                 if (shares.isNullOrEmpty()) Text("Общих папок не найдено", color = AA.TextDim)

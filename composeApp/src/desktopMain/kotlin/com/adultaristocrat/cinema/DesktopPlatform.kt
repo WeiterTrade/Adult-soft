@@ -72,8 +72,25 @@ class DesktopPlatform(private val windowState: WindowState) : Platform {
 
     // ---------------- Офлайн-библиотека ----------------
 
+    override val fileStore: LocalFileStore by lazy { DesktopFileStore() }
+
+    override suspend fun pickFolder(title: String): String? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+        runCatching { javax.swing.UIManager.setLookAndFeel(javax.swing.UIManager.getSystemLookAndFeelClassName()) }
+        val ch = javax.swing.JFileChooser().apply {
+            dialogTitle = title
+            fileSelectionMode = javax.swing.JFileChooser.DIRECTORIES_ONLY
+            isAcceptAllFileFilterUsed = false
+        }
+        if (ch.showOpenDialog(null) == javax.swing.JFileChooser.APPROVE_OPTION) ch.selectedFile?.absolutePath else null
+    }
+
     override val offlineEngine: com.adultaristocrat.cinema.offline.OfflineEngine by lazy {
-        com.adultaristocrat.cinema.offline.JvmOfflineEngine()
+        com.adultaristocrat.cinema.offline.JvmOfflineEngine().apply {
+            frameGrabber = { url, ms -> VlcThumbs.grab(url, ms) }
+            directorImage = {
+                DesktopPlatform::class.java.getResourceAsStream("/director.jpg")?.use { it.readBytes() }
+            }
+        }
     }
 
     private val dataDir: java.io.File by lazy {

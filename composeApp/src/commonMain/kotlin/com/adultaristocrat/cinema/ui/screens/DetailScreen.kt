@@ -463,7 +463,7 @@ private fun InfoBody(state: AppState, model: DetailModel, item: BaseItem, playFo
     val actors = item.people.filter { it.type == "Actor" || it.type == "GuestStar" }.take(30)
     val directors = item.people.filter { it.type == "Director" }.take(10)
     val openPerson: (com.adultaristocrat.cinema.api.PersonDto) -> Unit = { p ->
-        if (!p.id.startsWith("offp:")) state.navigate(Route.Person(p.id, p.name ?: ""))
+        state.navigate(Route.Person(p.id, p.name ?: ""))
     }
     PeopleRow("В ролях", actors, api, ui.isPhone, openPerson)
     PeopleRow("Режиссёры", directors, api, ui.isPhone, openPerson)

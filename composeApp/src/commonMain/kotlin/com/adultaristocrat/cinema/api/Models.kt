@@ -116,9 +116,17 @@ data class BaseItem(
     @SerialName("ProviderIds") val providerIds: Map<String, String> = emptyMap(),
     @SerialName("MediaSources") val mediaSources: List<MediaSource> = emptyList(),
     @SerialName("Chapters") val chapters: List<ChapterDto> = emptyList(),
+    /** Путь к файлу на сервере (для скачивания библиотеки с той же структурой папок) */
+    @SerialName("Path") val path: String? = null,
+    @SerialName("SortName") val sortName: String? = null,
+    @SerialName("Studios") val studios: List<NameRef> = emptyList(),
     /** Офлайн-библиотека: адреса постера, фанарта и видео через локальный сервер */
     @kotlinx.serialization.Transient val localPoster: String? = null,
     @kotlinx.serialization.Transient val localBack: String? = null,
+    /** Офлайн: картинки сцен (кадры из видео) */
+    @kotlinx.serialization.Transient val localChapterThumbs: List<String?> = emptyList(),
+    /** Офлайн: дополнительные сведения об актёре (из .bio) — пары «подпись, значение» */
+    @kotlinx.serialization.Transient val localFacts: List<Pair<String, String>> = emptyList(),
     @kotlinx.serialization.Transient val localFanart: String? = null,
     @kotlinx.serialization.Transient val localVideo: String? = null,
 ) {
@@ -168,7 +176,11 @@ data class MediaSource(
     @SerialName("TranscodingUrl") val transcodingUrl: String? = null,
     @SerialName("MediaStreams") val mediaStreams: List<MediaStream> = emptyList(),
     @SerialName("RunTimeTicks") val runTimeTicks: Long? = null,
+    @SerialName("Size") val size: Long? = null,
 )
+
+@Serializable
+data class NameRef(@SerialName("Name") val name: String? = null)
 
 @Serializable
 data class PlaybackInfoResponse(

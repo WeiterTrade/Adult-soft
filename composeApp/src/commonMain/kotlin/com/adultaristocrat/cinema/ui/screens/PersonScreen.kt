@@ -42,6 +42,7 @@ import com.adultaristocrat.cinema.AppConfig
 import com.adultaristocrat.cinema.AppState
 import com.adultaristocrat.cinema.Route
 import com.adultaristocrat.cinema.api.BaseItem
+import com.adultaristocrat.cinema.api.ItemsResult
 import com.adultaristocrat.cinema.api.JellyfinApi
 import com.adultaristocrat.cinema.ui.AA
 import com.adultaristocrat.cinema.ui.Countries
@@ -57,13 +58,21 @@ import kotlinx.coroutines.launch
 
 class PersonModel(state: AppState, val personId: String, val name: String) {
     private val api = state.api
+    /** Офлайн-библиотека: человек из файлов (.actors, .bio) */
+    val offline = personId.startsWith("offp:")
     var person by mutableStateOf<BaseItem?>(null)
     var bioExpanded by mutableStateOf(false)
     val photoFocus = androidx.compose.ui.focus.FocusRequester()
+    val photoUrl: String? =
+        if (offline) state.offline.personPhoto(personId)
+        else "${api.baseUrl}/Items/$personId/Images/Primary?maxHeight=900&quality=90"
 
     /** Фильмы с этим актёром, которые есть в кинотеатре */
     val grid = GridModel(state.scope) { start, limit ->
-        api.items(
+        if (offline) {
+            val all = state.offline.moviesWith(personId).sortedByDescending { it.productionYear ?: 0 }
+            ItemsResult(all.drop(start).take(limit), all.size)
+        } else api.items(
             types = AppConfig.CONTENT_TYPES, personIds = personId,
             sortBy = "ProductionYear,PremiereDate,SortName", sortOrder = "Descending",
             startIndex = start, limit = limit,
@@ -71,7 +80,8 @@ class PersonModel(state: AppState, val personId: String, val name: String) {
     }
 
     init {
-        state.scope.launch { person = runCatching { api.person(personId) }.getOrNull() }
+        if (offline) person = state.offline.person(personId, name)
+        else state.scope.launch { person = runCatching { api.person(personId) }.getOrNull() }
     }
 }
 
@@ -178,7 +188,7 @@ private fun PersonPhoto(model: PersonModel, route: Route.Person, api: JellyfinAp
             .focusable(interactionSource = photoFv.interaction)
     ) {
         AdaptivePhoto(
-            url = "${api.baseUrl}/Items/${route.personId}/Images/Primary?maxHeight=900&quality=90",
+            url = model.photoUrl,
             name = route.name,
             cornerRadius = 16.dp,
             borderWidth = if (photoFv.active) 3.dp else 1.5.dp,
@@ -207,6 +217,8 @@ private fun PersonInfo(state: AppState, model: PersonModel, route: Route.Person)
         InfoLine("Дата рождения", ruDate(born) + ageText)
     }
     if (died != null) InfoLine("Дата смерти", ruDate(died))
+    // Дата из .bio, которую не удалось разобрать, — показываем как есть
+    if (born == null) person?.premiereDate?.takeIf { it.isNotBlank() && it.first().isDigit().not() }?.let { InfoLine("Дата рождения", it) }
     person?.productionLocations?.firstOrNull()?.let { place ->
         // Место рождения обычно «Город, Страна» — переводим страну, если знаем
         val parts = place.split(",").map { it.trim() }
@@ -214,6 +226,8 @@ private fun PersonInfo(state: AppState, model: PersonModel, route: Route.Person)
         val text = if (c != null) (parts.dropLast(1) + c.ru).joinToString(", ") else place
         InfoLine("Место рождения", text)
     }
+    // Краткая справка из .bio: рост, годы активности, жанры, достижения…
+    person?.localFacts?.forEach { (k, v) -> InfoLine(k, v) }
     val bio = person?.overview?.replace(Regex("<[^>]*>"), "")?.trim()
     if (!bio.isNullOrEmpty()) {
         Spacer(Modifier.height(12.dp))

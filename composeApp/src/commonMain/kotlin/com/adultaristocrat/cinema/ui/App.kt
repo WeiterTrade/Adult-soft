@@ -1,5 +1,6 @@
 package com.adultaristocrat.cinema.ui
 
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -104,6 +105,9 @@ fun App(state: AppState) {
 private fun Shell(state: AppState) {
     Box(Modifier.fillMaxSize()) {
         ShellContent(state)
+        if (state.showDownloads) {
+            com.adultaristocrat.cinema.ui.screens.DownloadDialog(state) { state.showDownloads = false }
+        }
         state.toast?.let { msg ->
             Text(
                 msg,
@@ -135,7 +139,12 @@ private fun ShellContent(state: AppState) {
         }
     } else {
         Row(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-            NavRail(state.currentTab, state.platform) { state.openTab(it) }
+            NavRail(
+                state.currentTab, state.platform,
+                // Скачивание библиотеки — только на ПК и только с сервером
+                onDownload = if (state.platform.fileStore != null && !state.offlineMode) ({ state.showDownloads = true }) else null,
+                downloading = state.platform.fileStore != null && state.downloads.running,
+            ) { state.openTab(it) }
             Box(Modifier.weight(1f).fillMaxHeight()) {
                 key(route) { RouteContent(state, route) }
             }
@@ -161,7 +170,13 @@ private fun RouteContent(state: AppState, route: Route) {
 }
 
 @Composable
-private fun NavRail(current: AppTab, platform: com.adultaristocrat.cinema.Platform, onSelect: (AppTab) -> Unit) {
+private fun NavRail(
+    current: AppTab,
+    platform: com.adultaristocrat.cinema.Platform,
+    onDownload: (() -> Unit)? = null,
+    downloading: Boolean = false,
+    onSelect: (AppTab) -> Unit,
+) {
     // Панель не прокручивается: размер кнопок подбирается под высоту экрана
     BoxWithConstraints(
         Modifier
@@ -170,7 +185,7 @@ private fun NavRail(current: AppTab, platform: com.adultaristocrat.cinema.Platfo
             .background(Color(0xF0000000))
             .border(1.dp, AA.BorderDark),
     ) {
-        val count = AppTab.entries.size + 1 // + наушники
+        val count = AppTab.entries.size + 1 + (if (onDownload != null) 1 else 0) // + наушники, загрузки
         val logo = 44.dp
         val free = maxHeight - logo - 28.dp
         val btn = (free / count - 4.dp).coerceIn(34.dp, 56.dp)
@@ -181,10 +196,38 @@ private fun NavRail(current: AppTab, platform: com.adultaristocrat.cinema.Platfo
         ) {
             Logo(logo)
             HeadphonesButton(platform, btn)
+            if (onDownload != null) DownloadButton(btn, downloading, onDownload)
             AppTab.entries.forEach { tab ->
                 NavButton(tab, tab == current, btn) { onSelect(tab) }
             }
         }
+    }
+}
+
+/** Скачать библиотеку на компьютер: серая иконка; красная, пока идёт скачивание */
+@Composable
+private fun DownloadButton(size: androidx.compose.ui.unit.Dp, active: Boolean, onClick: () -> Unit) {
+    val fv = rememberFocusVisual()
+    val shape = RoundedCornerShape(14.dp)
+    Box(
+        Modifier
+            .size(size)
+            .clip(shape)
+            .background(if (fv.active) Color(0xFF1C1C1C) else Color.Transparent)
+            .border(if (fv.active) 2.dp else 0.dp, if (fv.active) AA.Text else Color.Transparent, shape)
+            .clickable(interactionSource = fv.interaction, indication = null, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            androidx.compose.material.icons.Icons.Rounded.Download,
+            if (active) "Идёт скачивание библиотеки" else "Скачать библиотеку",
+            tint = when {
+                active -> AA.Red
+                fv.active -> Color(0xFFBDBDBD)
+                else -> Color(0xFF5C5C5C)
+            },
+            modifier = Modifier.size(size * 0.5f),
+        )
     }
 }
 

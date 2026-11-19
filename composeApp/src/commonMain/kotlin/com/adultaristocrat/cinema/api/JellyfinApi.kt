@@ -220,6 +220,65 @@ class JellyfinApi(
         items(ids = id, types = null, recursive = false, sortBy = "SortName", sortOrder = "Ascending", fields = DETAIL_FIELDS, limit = 1)
             .items.firstOrNull() ?: error("Элемент не найден")
 
+    // ---------------- Скачивание библиотеки (ПК) ----------------
+
+    /** Все фильмы раздела с путями и размерами — для окна скачивания */
+    suspend fun libraryItems(parentId: String): List<BaseItem> = getJson<ItemsResult>(
+        "/Items",
+        mapOf(
+            "userId" to userId,
+            "ParentId" to parentId,
+            "IncludeItemTypes" to AppConfig.CONTENT_TYPES,
+            "Recursive" to true,
+            "SortBy" to "SortName",
+            "SortOrder" to "Ascending",
+            "Fields" to "Path,MediaSources,ProductionLocations",
+            "EnableImageTypes" to "Primary",
+            "ImageTypeLimit" to 1,
+            "EnableUserData" to false,
+        )
+    ).items
+
+    /** Всё о фильме для .nfo */
+    suspend fun fullItem(id: String): BaseItem =
+        items(
+            ids = id, types = null, recursive = false, sortBy = "SortName", sortOrder = "Ascending", limit = 1,
+            fields = DETAIL_FIELDS + ",Path,Studios,SortName,DateCreated",
+        ).items.firstOrNull() ?: error("Фильм не найден")
+
+    /** Оригинальный файл (нужно право «Скачивание» у пользователя в Jellyfin) */
+    fun downloadUrl(itemId: String): String = "$baseUrl/Items/$itemId/Download" + q("api_key", token).replaceFirst('&', '?')
+
+    /**
+     * Скачивание в уменьшенном качестве: сервер перекодирует в H.264 + AAC и отдаёт один MKV-файл.
+     * Сцены сервер при этом не передаёт — приложение сохраняет их рядом (.chapters.xml).
+     */
+    fun transcodeDownloadUrl(itemId: String, mediaSourceId: String?, q: com.adultaristocrat.cinema.Quality): String =
+        "$baseUrl/Videos/$itemId/stream.mkv?Static=false&VideoCodec=h264&AudioCodec=aac" +
+            "&MaxHeight=${q.maxHeight}&MaxWidth=${q.maxHeight * 16 / 9 + 1}" +
+            "&VideoBitrate=${q.bitrate}&MaxStreamingBitrate=${q.bitrate + 200_000}" +
+            "&AudioBitrate=${if (q.bitrate <= 1_000_000) 96000 else 160000}&MaxAudioChannels=2&TranscodingMaxAudioChannels=2" +
+            "&BreakOnNonKeyFrames=false&CopyTimestamps=false" +
+            q("MediaSourceId", mediaSourceId) + q("DeviceId", deviceId) + q("api_key", token)
+
+    /** Картинка в исходном размере: Primary, BoxRear, Backdrop/0 */
+    fun originalImageUrl(itemId: String, type: String): String = "$baseUrl/Items/$itemId/Images/$type?quality=100"
+
+    /** Все люди библиотеки с биографиями — для поиска актрис по-русски и по-английски */
+    suspend fun allPersons(): List<BaseItem> = getJson<ItemsResult>(
+        "/Persons",
+        mapOf(
+            "userId" to userId,
+            "Fields" to "Overview",
+            "EnableImageTypes" to "Primary",
+            "ImageTypeLimit" to 1,
+            "EnableUserData" to false,
+        )
+    ).items
+
+    fun personImageUrl(person: BaseItem, maxHeight: Int = 400): String? =
+        person.imageTags["Primary"]?.let { "$baseUrl/Items/${person.id}/Images/Primary?tag=$it&maxHeight=$maxHeight&quality=90" }
+
     /** Карточка актёра: биография, дата и место рождения */
     suspend fun person(id: String): BaseItem {
         val f = "Overview,ProductionLocations,PremiereDate,EndDate,ProviderIds"
@@ -376,7 +435,7 @@ class JellyfinApi(
             com.adultaristocrat.cinema.Chapter(
                 name = c.name?.takeIf { it.isNotBlank() } ?: "Сцена ${i + 1}",
                 startMs = c.startPositionTicks / TICKS_PER_MS,
-                imageUrl = chapterImageUrl(item.id, i, c.imageTag),
+                imageUrl = if (item.isOffline) item.localChapterThumbs.getOrNull(i) else chapterImageUrl(item.id, i, c.imageTag),
             )
         }
 

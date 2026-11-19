@@ -94,7 +94,36 @@ class AndroidPlatform(private val activity: Activity) : Platform {
     // ---------------- Офлайн-библиотека ----------------
 
     override val offlineEngine: com.adultaristocrat.cinema.offline.OfflineEngine by lazy {
-        com.adultaristocrat.cinema.offline.JvmOfflineEngine()
+        com.adultaristocrat.cinema.offline.JvmOfflineEngine().apply {
+            frameGrabber = { url, ms -> grabFrame(url, ms) }
+            directorImage = { runCatching { activity.assets.open("director.jpg").use { it.readBytes() } }.getOrNull() }
+        }
+    }
+
+    /** Кадр из видео для картинки сцены (офлайн-библиотека) */
+    private fun grabFrame(url: String, ms: Long): ByteArray? {
+        val r = android.media.MediaMetadataRetriever()
+        return try {
+            r.setDataSource(url, HashMap<String, String>())
+            val us = ms * 1000
+            val opt = android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC
+            val bmp = if (android.os.Build.VERSION.SDK_INT >= 27) {
+                r.getScaledFrameAtTime(us, opt, 480, 480)
+            } else {
+                r.getFrameAtTime(us, opt)?.let { b ->
+                    val w = 480
+                    val h = (w.toFloat() * b.height / b.width.coerceAtLeast(1)).toInt().coerceAtLeast(1)
+                    android.graphics.Bitmap.createScaledBitmap(b, w, h, true)
+                }
+            } ?: return null
+            val bos = java.io.ByteArrayOutputStream()
+            bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 82, bos)
+            bos.toByteArray()
+        } catch (t: Throwable) {
+            null
+        } finally {
+            runCatching { r.release() }
+        }
     }
 
     override fun readFile(name: String): String? =
