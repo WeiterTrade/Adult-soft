@@ -118,6 +118,7 @@ data class BaseItem(
     @SerialName("Chapters") val chapters: List<ChapterDto> = emptyList(),
     /** Офлайн-библиотека: адреса постера, фанарта и видео через локальный сервер */
     @kotlinx.serialization.Transient val localPoster: String? = null,
+    @kotlinx.serialization.Transient val localBack: String? = null,
     @kotlinx.serialization.Transient val localFanart: String? = null,
     @kotlinx.serialization.Transient val localVideo: String? = null,
 ) {

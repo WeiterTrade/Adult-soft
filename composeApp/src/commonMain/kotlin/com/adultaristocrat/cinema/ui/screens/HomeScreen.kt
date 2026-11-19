@@ -138,6 +138,13 @@ class HomeModel(private val state: AppState) {
         }
     }
 
+    /** Обновление жестом: заново разделы, подборки и списки фильтра */
+    fun refreshServerData() {
+        facets = null
+        index = null
+        if (!state.offlineMode) loadServerData()
+    }
+
     fun select(m: HomeMode) {
         if (m == mode) return
         mode = m
@@ -175,6 +182,13 @@ fun HomeScreen(state: AppState, route: Route.Tab) {
         api = api,
         onItemClick = { state.navigate(Route.Detail(it.id)) },
         modifier = Modifier.fillMaxSize(),
+        emptyText = when {
+            !state.offlineMode -> "Здесь пока пусто"
+            state.offline.state.sources.isEmpty() ->
+                "Офлайн-библиотека пуста.\nПодключите источник: Настройки → Офлайн-библиотека."
+            else -> "Офлайн-библиотека пуста.\nДобавьте фильмы в папки источника и нажмите «Сканировать папки» в настройках."
+        },
+        onRefresh = { model.refreshServerData() },
         header = {
             item(span = { GridItemSpan(maxLineSpan) }, key = "chips") {
                 Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {

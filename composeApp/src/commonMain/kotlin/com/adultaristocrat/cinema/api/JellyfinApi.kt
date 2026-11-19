@@ -189,7 +189,7 @@ class JellyfinApi(
             "Ids" to ids,
             "PersonIds" to personIds,
             "Fields" to fields,
-            "EnableImageTypes" to "Primary,Backdrop,Thumb",
+            "EnableImageTypes" to "Primary,Backdrop,Thumb,BoxRear",
             "ImageTypeLimit" to 1,
             "EnableTotalRecordCount" to true,
         )
@@ -335,6 +335,14 @@ class JellyfinApi(
     }
 
     // ---------------- Картинки ----------------
+
+    /** Задняя обложка: в Jellyfin — изображение типа BoxRear («Задник коробки»), офлайн — файл -back.jpg */
+    fun backCoverUrl(item: BaseItem, maxHeight: Int = 900): String? = when {
+        item.isOffline -> item.localBack
+        item.imageTags["BoxRear"] != null ->
+            "$baseUrl/Items/${item.id}/Images/BoxRear?tag=${item.imageTags["BoxRear"]}&maxHeight=$maxHeight&quality=90"
+        else -> null
+    }
 
     fun posterUrl(item: BaseItem, maxHeight: Int = 480): String? = when {
         item.isOffline -> item.localPoster

@@ -89,7 +89,7 @@ fun App(state: AppState) {
                 wideMin = if (isPhone) 260.dp else 300.dp,
                 hPad = if (isPhone) 8.dp else 16.dp,
             )
-            CompositionLocalProvider(LocalUi provides metrics, LocalLogo provides platform.logoPainter()) {
+            CompositionLocalProvider(LocalUi provides metrics, LocalLogo provides platform.logoPainter(), LocalAppState provides state) {
                 if (!state.loggedIn && !state.offlineMode) {
                     LoginScreen(state)
                 } else {

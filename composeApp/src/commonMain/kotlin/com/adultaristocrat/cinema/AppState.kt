@@ -57,6 +57,14 @@ class AppState(val platform: Platform) {
         offlineMode = true
     }
 
+    /** Кнопка «Включить офлайн-библиотеку» на экране ошибки загрузки */
+    fun switchToOfflineLibrary() {
+        if (!offline.state.enabled) offline.setEnabled(true)
+        enterOffline()
+        if (offline.state.movies.isEmpty()) offline.scan()
+        showToast("Включена офлайн-библиотека")
+    }
+
     fun exitOffline() {
         offline.flush()
         models.clear()
@@ -131,7 +139,8 @@ class AppState(val platform: Platform) {
         // Во время просмотра не переключаемся — только после выхода из плеера
         if (current is Route.Player) return
         val canOffline = offline.enabled && offline.state.movies.isNotEmpty()
-        if (offline.forceOffline && canOffline) {
+        // «Всегда офлайн» — только офлайн-библиотека, даже если она пуста
+        if (offline.forceOffline) {
             if (!offlineMode) enterOffline()
             return
         }

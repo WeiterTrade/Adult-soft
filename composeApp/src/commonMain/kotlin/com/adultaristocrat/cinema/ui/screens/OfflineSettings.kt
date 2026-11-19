@@ -108,6 +108,12 @@ fun OfflineSettings(state: AppState) {
                     )
                     SwitchRow("Всегда офлайн (не подключаться к серверу)", st.forceOffline) {
                         lib.setForceOffline(it)
+                        if (it && !state.offlineMode) {
+                            // Сразу только офлайн-библиотека; остаёмся в настройках
+                            state.enterOffline()
+                            state.openTab(com.adultaristocrat.cinema.AppTab.SETTINGS)
+                            state.showToast("Включена только офлайн-библиотека")
+                        }
                         if (!it && state.offlineMode) state.exitOffline()
                         state.checkConnectionNow()
                     }

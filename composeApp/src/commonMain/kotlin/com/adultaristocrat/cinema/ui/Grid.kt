@@ -1,6 +1,10 @@
 package com.adultaristocrat.cinema.ui
 
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -123,6 +127,7 @@ class GridModel(
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun PagedGrid(
     model: GridModel,
@@ -137,6 +142,8 @@ fun PagedGrid(
     /** Куда перевести фокус по стрелке «вверх» с первого ряда (например, фото актёра) */
     headerFocus: FocusRequester? = null,
     header: (LazyGridScope.() -> Unit)? = null,
+    /** Дополнительно при обновлении жестом (например, перечитать разделы главной) */
+    onRefresh: (() -> Unit)? = null,
 ) {
     val ui = LocalUi.current
     val requester = remember(model) { FocusRequester() }
@@ -158,12 +165,17 @@ fun PagedGrid(
         }
     }
 
+    // Телефоны и планшеты: потянуть список вниз от верха — обновить страницу
+    val touch = !ui.isTv && !ui.isDesktop
+    var refreshing by remember(model) { mutableStateOf(false) }
+    LaunchedEffect(model, model.loading) { if (!model.loading) refreshing = false }
+    val grid: @Composable () -> Unit = {
     LazyVerticalGrid(
         columns = GridCells.Adaptive(if (wide) ui.wideMin else ui.cardMin),
         state = model.gridState,
         // Пульт: «вверх» с первого ряда фильмов сначала прокручивает к шапке страницы,
         // а не перебрасывает фокус на боковую панель
-        modifier = modifier.onPreviewKeyEvent { e ->
+        modifier = Modifier.fillMaxSize().onPreviewKeyEvent { e ->
             if (e.type != KeyEventType.KeyDown || e.key != Key.DirectionUp) return@onPreviewKeyEvent false
             val info = model.gridState.layoutInfo
             fun keyOf(i: Int) = "$i:"
@@ -197,13 +209,70 @@ fun PagedGrid(
         }
         item(span = { GridItemSpan(maxLineSpan) }, key = "footer") {
             when {
-                model.error != null -> MessageBox("Ошибка загрузки: ${model.error}", Modifier.height(220.dp), "Повторить") { model.retry() }
+                model.error != null -> LoadErrorBox(Modifier.height(260.dp)) { model.retry() }
                 model.loading -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = AA.Red)
                 }
                 model.items.isEmpty() && model.endReached -> MessageBox(emptyText, Modifier.height(220.dp))
                 else -> Box(Modifier.height(1.dp))
             }
+        }
+    }
+    }
+    if (touch) {
+        val refreshState = androidx.compose.material3.pulltorefresh.rememberPullToRefreshState()
+        androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+            isRefreshing = refreshing,
+            onRefresh = {
+                refreshing = true
+                onRefresh?.invoke()
+                model.reload()
+            },
+            state = refreshState,
+            modifier = modifier,
+            indicator = {
+                androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.Indicator(
+                    state = refreshState,
+                    isRefreshing = refreshing,
+                    modifier = Modifier.align(Alignment.TopCenter),
+                    containerColor = AA.SurfaceHigh,
+                    color = AA.Red,
+                )
+            },
+        ) { grid() }
+    } else {
+        Box(modifier) { grid() }
+    }
+}
+
+/** Состояние приложения для общих экранов ошибок (кнопка «Включить офлайн-библиотеку») */
+val LocalAppState = androidx.compose.runtime.staticCompositionLocalOf<com.adultaristocrat.cinema.AppState?> { null }
+
+/**
+ * Ошибка загрузки без технических подробностей: «Обновить» и, если выбраны папки
+ * офлайн-библиотеки, «Включить офлайн-библиотеку».
+ */
+@Composable
+fun LoadErrorBox(modifier: Modifier = Modifier, onRetry: () -> Unit) {
+    val state = LocalAppState.current
+    Column(
+        modifier.fillMaxWidth().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        androidx.compose.material3.Text(
+            "Ошибка загрузки",
+            color = AA.Text, style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
+        )
+        Spacer(Modifier.height(18.dp))
+        AAButton("Обновить", androidx.compose.material.icons.Icons.Rounded.Refresh, onRetry, Modifier.widthIn(min = 260.dp))
+        val lib = state?.offline
+        if (state != null && lib != null && lib.supported && lib.state.sources.isNotEmpty() && !state.offlineMode) {
+            Spacer(Modifier.height(12.dp))
+            AAButton(
+                "Включить офлайн-библиотеку", androidx.compose.material.icons.Icons.Rounded.FolderShared,
+                { state.switchToOfflineLibrary() }, Modifier.widthIn(min = 260.dp), primary = false,
+            )
         }
     }
 }

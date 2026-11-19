@@ -22,9 +22,11 @@ class Nfo internal constructor(private val top: String, private val full: String
         .toList()
 
     fun rating(): Float? {
-        // Простой вариант: <rating>7.4</rating>
-        rx("rating").find(top)?.groupValues?.get(1)?.takeIf { !it.contains('<') }
-            ?.let { clean(it).replace(',', '.').toFloatOrNull() }?.let { return it }
+        // Простой вариант: <rating>7.4</rating>. Ищем среди всех <rating>, т.к. первым часто идёт
+        // <rating name="…"><value>…</value></rating> внутри блока <ratings>
+        val noBlock = top.replace(rx("ratings"), "")
+        rx("rating").findAll(noBlock).map { it.groupValues[1] }.filter { !it.contains('<') }
+            .firstNotNullOfOrNull { clean(it).replace(',', '.').toFloatOrNull() }?.let { return it }
         // Новый вариант: <ratings><rating name="imdb" default="true"><value>7.4</value></rating></ratings>
         val block = rx("ratings").find(top)?.groupValues?.get(1) ?: return null
         val items = Regex(

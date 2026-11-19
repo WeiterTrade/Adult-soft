@@ -166,12 +166,18 @@ class JvmOfflineEngine : OfflineEngine {
         fun find(vararg names: String): SmbFile? =
             names.firstNotNullOfOrNull { want -> files.firstOrNull { it.name.equals(want, ignoreCase = true) } }
 
+        val videosHere = files.count { f ->
+            val n = f.name.lowercase()
+            !n.endsWith("/") && n.substringAfterLast('.', "") in videoExt && !n.contains("sample") && !n.contains("-trailer")
+        }
+        // .nfo с именем видео, movie.nfo или единственный .nfo в папке с одним фильмом
         val nfoFile = find("$base.nfo", "movie.nfo")
-        val poster = find(
-            "$base-poster.jpg", "$base-poster.png", "poster.jpg", "poster.png",
-            "folder.jpg", "cover.jpg", "$base.jpg", "$base.png",
-        )
-        val fanart = find("$base-fanart.jpg", "$base-fanart.png", "fanart.jpg", "fanart.png", "backdrop.jpg", "$base-landscape.jpg")
+            ?: if (videosHere == 1) files.singleOrNull { it.name.lowercase().endsWith(".nfo") } else null
+        val img = listOf("jpg", "jpeg", "png", "webp")
+        fun pics(vararg names: String) = names.flatMap { n -> img.map { "$n.$it" } }.toTypedArray()
+        val poster = find(*pics("$base-poster", "poster", "folder", "cover", "$base-cover", "$base-thumb", "$base"))
+        val back = find(*pics("$base-back", "$base-backcover", "$base-rear", "$base-boxrear", "back", "backcover", "boxrear", "cover-back"))
+        val fanart = find(*pics("$base-fanart", "fanart", "backdrop", "$base-backdrop", "$base-landscape", "landscape"))
         val actorsDir = files.firstOrNull { it.name.equals(".actors/", ignoreCase = true) }
         val actorPics: Map<String, String> = actorsDir?.let { d ->
             runCatching {
@@ -210,6 +216,7 @@ class JvmOfflineEngine : OfflineEngine {
             mpaa = nfo?.text("mpaa"),
             video = video.path,
             poster = poster?.path,
+            back = back?.path,
             fanart = fanart?.path,
             actors = nfo?.actors()?.takeIf { it.isNotEmpty() }?.map { (n, role, thumb) -> OfflineActor(n, role, actorThumb(n, thumb)) }
                 ?: actorPics.keys.map { OfflineActor(it.replace('_', ' ').replaceFirstChar { c -> c.uppercase() }, null, actorPics[it]) },

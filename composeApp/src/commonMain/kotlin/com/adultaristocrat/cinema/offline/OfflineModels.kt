@@ -41,6 +41,8 @@ data class OfflineMovie(
     /** smb:// пути */
     val video: String,
     val poster: String? = null,
+    /** Задняя обложка: «Название (год)-back.jpg» */
+    val back: String? = null,
     val fanart: String? = null,
     val actors: List<OfflineActor> = emptyList(),
     val directors: List<String> = emptyList(),

@@ -1,5 +1,7 @@
 package com.adultaristocrat.cinema.ui.screens
 
+import androidx.compose.material.icons.rounded.Flip
+import androidx.compose.ui.graphics.graphicsLayer
 import com.adultaristocrat.cinema.ui.FlagImage
 
 import com.adultaristocrat.cinema.TagKind
@@ -189,7 +191,7 @@ fun DetailScreen(state: AppState, route: Route.Detail) {
     }
     val item = model.item
     when {
-        model.error != null -> MessageBox("Не удалось загрузить: ${model.error}", actionText = "Повторить") { model.load() }
+        model.error != null -> com.adultaristocrat.cinema.ui.LoadErrorBox(Modifier.fillMaxSize()) { model.load() }
         item == null -> LoadingBox()
         else -> DetailContent(state, model, item)
     }
@@ -219,18 +221,12 @@ private fun DetailContent(state: AppState, model: DetailModel, item: BaseItem) {
                 TitleBlock(item)
                 Spacer(Modifier.height(10.dp))
                 // Постер (обложка), как на ТВ
-                Box(
-                    Modifier.fillMaxWidth(0.66f).align(Alignment.CenterHorizontally).aspectRatio(AA.POSTER_RATIO)
-                        .clip(RoundedCornerShape(16.dp)).background(AA.SurfaceHigh)
-                        .border(1.5.dp, AA.BorderDark, RoundedCornerShape(16.dp))
+                FlipPoster(
+                    front = api.posterUrl(item, 900) ?: api.backdropUrl(item, 1000),
+                    back = api.backCoverUrl(item),
+                    title = item.name,
+                    modifier = Modifier.fillMaxWidth(0.66f).align(Alignment.CenterHorizontally),
                 ) {
-                    AsyncImage(
-                        model = api.posterUrl(item, 900) ?: api.backdropUrl(item, 1000),
-                        contentDescription = item.name, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(),
-                    )
-                    item.officialRating?.let {
-                        Badge(it, Modifier.align(Alignment.TopStart).padding(8.dp), bg = Color(0xFFD32F2F))
-                    }
                     item.runtimeMinutes?.let {
                         Badge(runtimeText(it), Modifier.align(Alignment.BottomEnd).padding(8.dp))
                     }
@@ -242,15 +238,12 @@ private fun DetailContent(state: AppState, model: DetailModel, item: BaseItem) {
             Row(Modifier.fillMaxSize().padding(start = 16.dp, top = 12.dp, end = 16.dp)) {
                 Column(Modifier.fillMaxWidth(0.3f).fillMaxHeight().padding(top = 8.dp, end = 18.dp)) {
                     if (!ui.isTv) BackRow(state)
-                    Box(Modifier.fillMaxWidth().aspectRatio(AA.POSTER_RATIO).clip(RoundedCornerShape(16.dp)).background(AA.SurfaceHigh)
-                        .border(1.5.dp, AA.BorderDark, RoundedCornerShape(16.dp))) {
-                        AsyncImage(
-                            model = api.posterUrl(item, 900), contentDescription = item.name,
-                            contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(),
-                        )
-                        item.officialRating?.let {
-                            Badge(it, Modifier.align(Alignment.TopStart).padding(8.dp), bg = Color(0xFFD32F2F))
-                        }
+                    FlipPoster(
+                        front = api.posterUrl(item, 900),
+                        back = api.backCoverUrl(item),
+                        title = item.name,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
                         Row(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                             item.episodeLabel?.let { Badge(it) } ?: Spacer(Modifier.width(1.dp))
                             item.runtimeMinutes?.let { Badge(runtimeText(it)) }
@@ -305,7 +298,12 @@ private fun TitleBlock(item: BaseItem) {
         Text("${item.episodeLabel ?: ""}  ${item.name ?: ""}", style = MaterialTheme.typography.titleMedium, color = AA.TextDim)
     }
     val ratings = buildList {
-        item.communityRating?.takeIf { it > 0 }?.let { add("IMDb" to formatRating(it)) }
+        // Рейтинг из NFO (<mpaa>Adult Рейтинг: 4.7</mpaa>) вместо IMDb
+        item.officialRating?.trim()?.takeIf { it.isNotEmpty() }?.let { r ->
+            val i = r.lastIndexOf(':')
+            if (i > 0) add(r.substring(0, i).trim() to r.substring(i + 1).trim().replace('.', ','))
+            else add("Рейтинг" to r)
+        }
         item.criticRating?.takeIf { it > 0 }?.let { add("Критики" to "${it.toInt()}%") }
     }
     if (ratings.isNotEmpty()) {
@@ -580,5 +578,61 @@ private fun SceneCard(index: Int, ch: Chapter, width: Dp, onClick: () -> Unit) {
             "${index + 1}. ${ch.name}", color = if (fv.active) AA.RedHover else AA.Text,
             fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
         )
+    }
+}
+
+/**
+ * Обложка, которая переворачивается, как на Adult Empire: нажатие (палец, мышь, OK на пульте)
+ * показывает заднюю обложку, повторное — снова переднюю. Без задней обложки — обычный постер.
+ * Плашки (длительность и т.п.) видны только на передней стороне.
+ */
+@Composable
+private fun FlipPoster(
+    front: String?,
+    back: String?,
+    title: String?,
+    modifier: Modifier,
+    badges: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit,
+) {
+    var flipped by remember(back) { mutableStateOf(false) }
+    val rotation by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (flipped) 180f else 0f,
+        animationSpec = androidx.compose.animation.core.tween(550),
+    )
+    val fv = com.adultaristocrat.cinema.ui.rememberFocusVisual()
+    val shape = RoundedCornerShape(16.dp)
+    val showBack = rotation > 90f
+    Box(
+        modifier
+            .aspectRatio(AA.POSTER_RATIO)
+            .graphicsLayer {
+                rotationY = rotation
+                cameraDistance = 14f * density
+            }
+            .clip(shape)
+            .background(AA.SurfaceHigh)
+            .border(if (fv.active && back != null) 3.dp else 1.5.dp, if (fv.active && back != null) AA.Red else AA.BorderDark, shape)
+            .then(
+                if (back != null) Modifier.clickable(interactionSource = fv.interaction, indication = null) { flipped = !flipped }
+                else Modifier
+            ),
+    ) {
+        AsyncImage(
+            model = if (showBack) back else front,
+            contentDescription = if (showBack) "Задняя обложка" else title,
+            contentScale = ContentScale.Fit,
+            // Задняя сторона повёрнута на 180° — разворачиваем картинку, чтобы она не была зеркальной
+            modifier = Modifier.fillMaxSize().graphicsLayer { if (showBack) rotationY = 180f },
+        )
+        if (!showBack) {
+            badges()
+            if (back != null) {
+                Icon(
+                    Icons.Rounded.Flip, "Перевернуть обложку", tint = Color.White,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp).size(30.dp)
+                        .clip(androidx.compose.foundation.shape.CircleShape).background(Color(0x99000000)).padding(5.dp),
+                )
+            }
+        }
     }
 }

@@ -194,6 +194,7 @@ class OfflineLibrary(private val platform: Platform, private val scope: Coroutin
                 com.adultaristocrat.cinema.api.ChapterDto(startPositionTicks = it.startMs * JellyfinApi.TICKS_PER_MS, name = it.name)
             },
             localPoster = url(m.poster),
+            localBack = url(m.back),
             localFanart = url(m.fanart),
             localVideo = url(m.video),
         )
