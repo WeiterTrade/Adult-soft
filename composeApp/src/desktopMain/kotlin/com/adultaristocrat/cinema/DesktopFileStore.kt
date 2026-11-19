@@ -72,6 +72,54 @@ class DesktopFileStore : LocalFileStore {
         }
     }
 
+    private fun open(url: String): HttpURLConnection = (URL(url).openConnection() as HttpURLConnection).apply {
+        connectTimeout = 15_000
+        // Часть видео сервер может перекодировать долго (особенно первую после перемотки)
+        readTimeout = 180_000
+        instanceFollowRedirects = true
+    }
+
+    override suspend fun getText(url: String): String = String(getBytes(url), Charsets.UTF_8)
+
+    override suspend fun getBytes(url: String): ByteArray = withContext(Dispatchers.IO) {
+        val conn = open(url)
+        try {
+            val code = conn.responseCode
+            if (code !in 200..299) throw HttpStatusError(code)
+            conn.inputStream.use { it.readBytes() }
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    override fun append(path: String, bytes: ByteArray) {
+        val f = File(path)
+        f.parentFile?.mkdirs()
+        java.io.FileOutputStream(f, true).use { it.write(bytes) }
+    }
+
+    override fun truncate(path: String, size: Long) {
+        val f = File(path)
+        f.parentFile?.mkdirs()
+        RandomAccessFile(f, "rw").use { it.setLength(size.coerceAtLeast(0)) }
+    }
+
+    override fun readText(path: String): String? = File(path).takeIf { it.isFile }?.readText(Charsets.UTF_8)
+
+    override fun delete(path: String) {
+        File(path).delete()
+    }
+
+    override fun rename(from: String, to: String) {
+        val a = File(from)
+        val b = File(to)
+        if (b.exists()) b.delete()
+        if (!a.renameTo(b)) {
+            a.copyTo(b, overwrite = true)
+            a.delete()
+        }
+    }
+
     override fun openFolder(path: String) {
         runCatching { java.awt.Desktop.getDesktop().open(File(path)) }
     }

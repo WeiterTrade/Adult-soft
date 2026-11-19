@@ -261,6 +261,23 @@ class JellyfinApi(
             "&BreakOnNonKeyFrames=false&CopyTimestamps=false" +
             q("MediaSourceId", mediaSourceId) + q("DeviceId", deviceId) + q("api_key", token)
 
+    /**
+     * То же уменьшенное видео, но частями по 6 секунд (HLS). Каждую часть можно запросить отдельно —
+     * поэтому после обрыва скачивание продолжается с той же части, а не с начала.
+     */
+    fun hlsDownloadUrl(itemId: String, mediaSourceId: String?, q: com.adultaristocrat.cinema.Quality, playSessionId: String): String =
+        "$baseUrl/Videos/$itemId/master.m3u8?VideoCodec=h264&AudioCodec=aac" +
+            "&MaxHeight=${q.maxHeight}&MaxWidth=${q.maxHeight * 16 / 9 + 1}" +
+            "&VideoBitrate=${q.bitrate}&MaxStreamingBitrate=${q.bitrate + 200_000}" +
+            "&AudioBitrate=${if (q.bitrate <= 1_000_000) 96000 else 160000}&MaxAudioChannels=2&TranscodingMaxAudioChannels=2" +
+            "&SegmentContainer=ts&SegmentLength=6&MinSegments=1&BreakOnNonKeyFrames=false" +
+            q("MediaSourceId", mediaSourceId) + q("PlaySessionId", playSessionId) + q("DeviceId", deviceId) + q("api_key", token)
+
+    /** Остановить перекодирование на сервере после скачивания */
+    suspend fun stopEncoding(playSessionId: String) {
+        runCatching { deleteEmpty("/Videos/ActiveEncodings", mapOf("deviceId" to deviceId, "playSessionId" to playSessionId)) }
+    }
+
     /** Картинка в исходном размере: Primary, BoxRear, Backdrop/0 */
     fun originalImageUrl(itemId: String, type: String): String = "$baseUrl/Items/$itemId/Images/$type?quality=100"
 

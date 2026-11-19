@@ -172,12 +172,13 @@ class LibraryDownloader(private val state: AppState) {
         val q = quality
         val original = q == com.adultaristocrat.cinema.Quality.ORIGINAL
         step = if (original) "Видео" else "Видео (${q.title}, сервер перекодирует)"
-        val videoPath = store.join(dir, if (original) fileName else "$base.mkv")
+        val videoPath = store.join(dir, if (original) fileName else "$base.ts")
         val durationSec = (item.runTimeTicks ?: 0L) / com.adultaristocrat.cinema.api.JellyfinApi.TICKS_PER_MS / 1000
         val expected = if (original) item.mediaSources.firstOrNull()?.size ?: 0L
         else (q.bitrate + (if (q.bitrate <= 1_000_000) 96_000 else 160_000)).toLong() / 8 * durationSec
         val have = store.size(videoPath)
-        if (have > 0 && (!original || expected <= 0 || have == expected)) return
+        val unfinished = store.size("$videoPath.progress") > 0
+        if (have > 0 && !unfinished && (!original || expected <= 0 || have == expected)) return
         val clock = kotlin.time.TimeSource.Monotonic.markNow()
         var lastT = 0L
         var lastB = 0L
@@ -193,20 +194,97 @@ class LibraryDownloader(private val state: AppState) {
             }
         }
         if (!original) {
-            // Размер заранее неизвестен — показываем прогресс по примерному размеру
-            store.download(api.transcodeDownloadUrl(item.id, item.mediaSources.firstOrNull()?.id, q), videoPath) { d, _ ->
-                onProgress(d, if (expected > 0) maxOf(expected, d) else -1L)
-            }
+            downloadHls(store, item, q, videoPath, expected, onProgress)
             return
         }
-        try {
-            store.download(api.downloadUrl(item.id), videoPath, onProgress)
-        } catch (ex: HttpStatusError) {
-            // Нет права «Скачивание» — берём тот же файл как поток без перекодирования
-            if (ex.code == 401 || ex.code == 403 || ex.code == 404) {
-                store.download(api.directStreamUrl(item.id, item.mediaSources.firstOrNull()?.id, null), videoPath, onProgress)
-            } else throw ex
+        retrying {
+            try {
+                store.download(api.downloadUrl(item.id), videoPath, onProgress)
+            } catch (ex: HttpStatusError) {
+                // Нет права «Скачивание» — берём тот же файл как поток без перекодирования
+                if (ex.code == 401 || ex.code == 403 || ex.code == 404) {
+                    store.download(api.directStreamUrl(item.id, item.mediaSources.firstOrNull()?.id, null), videoPath, onProgress)
+                } else throw ex
+            }
         }
+    }
+
+    /**
+     * Обрыв связи — ждём и пробуем снова (до 30 раз, пауза растёт до минуты).
+     * Оригинал докачивается с места обрыва, перекодированное видео — с той же части.
+     */
+    private suspend fun <T> retrying(block: suspend () -> T): T {
+        var attempt = 0
+        while (true) {
+            try {
+                return block()
+            } catch (c: CancellationException) {
+                throw c
+            } catch (e: HttpStatusError) {
+                if (e.code in 400..499) throw e // нет доступа — повтор не поможет
+                if (++attempt > 30) throw e
+            } catch (e: Exception) {
+                if (++attempt > 30) throw e
+            }
+            val wait = minOf(60, 3 * attempt)
+            for (sec in wait downTo 1) {
+                step = "Нет связи — повтор через $sec с (попытка $attempt)"
+                kotlinx.coroutines.delay(1000)
+            }
+        }
+    }
+
+    /**
+     * Перекодированное видео частями (HLS, по 6 секунд) в один файл .ts.
+     * Рядом лежит «.progress» — сколько частей уже записано; после обрыва или перезапуска
+     * программы скачивание продолжается с первой недокачанной части.
+     */
+    private suspend fun downloadHls(
+        store: LocalFileStore, item: BaseItem, q: com.adultaristocrat.cinema.Quality,
+        videoPath: String, expected: Long, onProgress: (Long, Long) -> Unit,
+    ) {
+        val session = "aadl" + kotlin.random.Random.nextLong().toULong().toString(16)
+        val masterUrl = api.hlsDownloadUrl(item.id, item.mediaSources.firstOrNull()?.id, q, session)
+        val master = retrying { store.getText(masterUrl) }
+        val variant = master.lines().map { it.trim() }.firstOrNull { it.isNotEmpty() && !it.startsWith("#") }
+            ?: error("Сервер не отдал список частей")
+        val variantUrl = resolve(masterUrl, variant)
+        val playlist = retrying { store.getText(variantUrl) }
+        val segments = playlist.lines().map { it.trim() }.filter { it.isNotEmpty() && !it.startsWith("#") }
+            .map { resolve(variantUrl, it) }
+        if (segments.isEmpty()) error("Сервер не отдал части видео")
+
+        val part = "$videoPath.part"
+        val progressFile = "$videoPath.progress"
+        // «частей;байт» — продолжаем с места остановки
+        val saved = store.readText(progressFile)?.trim()?.split(';')
+        var doneSeg = saved?.getOrNull(0)?.toIntOrNull()?.coerceIn(0, segments.size) ?: 0
+        var bytes = saved?.getOrNull(1)?.toLongOrNull() ?: 0L
+        if (doneSeg == 0) bytes = 0
+        store.truncate(part, bytes) // отрезаем кусок, записанный во время обрыва
+        try {
+            while (doneSeg < segments.size) {
+                val data = retrying { store.getBytes(segments[doneSeg]) }
+                store.append(part, data)
+                bytes += data.size
+                doneSeg++
+                store.writeText(progressFile, "$doneSeg;$bytes")
+                val estimate = if (doneSeg > 0) bytes / doneSeg * segments.size else expected
+                onProgress(bytes, maxOf(estimate, bytes))
+                step = "Видео (${q.title}): часть $doneSeg из ${segments.size}"
+            }
+        } finally {
+            api.stopEncoding(session)
+        }
+        store.delete(videoPath)
+        store.rename(part, videoPath)
+        store.delete(progressFile)
+    }
+
+    private fun resolve(base: String, ref: String): String = when {
+        ref.startsWith("http://") || ref.startsWith("https://") -> ref
+        ref.startsWith("/") -> base.substringBefore("://") + "://" + base.substringAfter("://").substringBefore('/') + ref
+        else -> base.substringBefore('?').substringBeforeLast('/') + "/" + ref
     }
 
     private suspend fun image(store: LocalFileStore, url: String, path: String) {

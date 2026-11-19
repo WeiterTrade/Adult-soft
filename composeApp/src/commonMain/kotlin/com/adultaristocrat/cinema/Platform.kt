@@ -138,6 +138,17 @@ interface LocalFileStore {
      */
     suspend fun download(url: String, path: String, onProgress: (done: Long, total: Long) -> Unit)
     fun openFolder(path: String)
+
+    // Для докачки перекодированного видео по частям (HLS)
+    suspend fun getText(url: String): String
+    suspend fun getBytes(url: String): ByteArray
+    /** Дописать в конец файла (создаёт файл и папки) */
+    fun append(path: String, bytes: ByteArray)
+    /** Обрезать файл до размера (недокачанный кусок после обрыва) */
+    fun truncate(path: String, size: Long)
+    fun readText(path: String): String?
+    fun delete(path: String)
+    fun rename(from: String, to: String)
 }
 
 class HttpStatusError(val code: Int) : Exception("HTTP $code")
