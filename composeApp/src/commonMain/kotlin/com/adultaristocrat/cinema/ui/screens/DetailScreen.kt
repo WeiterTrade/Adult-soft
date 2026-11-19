@@ -1,5 +1,17 @@
 package com.adultaristocrat.cinema.ui.screens
 
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.Dialog
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.ZoomOut
+import androidx.compose.material.icons.rounded.ZoomIn
 import androidx.compose.material.icons.rounded.Flip
 import androidx.compose.ui.graphics.graphicsLayer
 import com.adultaristocrat.cinema.ui.FlagImage
@@ -225,6 +237,8 @@ private fun DetailContent(state: AppState, model: DetailModel, item: BaseItem) {
                     front = api.posterUrl(item, 900) ?: api.backdropUrl(item, 1000),
                     back = api.backCoverUrl(item),
                     title = item.name,
+                    frontFull = api.posterUrl(item, 2400),
+                    backFull = api.backCoverUrl(item, 2400),
                     modifier = Modifier.fillMaxWidth(0.66f).align(Alignment.CenterHorizontally),
                 ) {
                     item.runtimeMinutes?.let {
@@ -242,6 +256,8 @@ private fun DetailContent(state: AppState, model: DetailModel, item: BaseItem) {
                         front = api.posterUrl(item, 900),
                         back = api.backCoverUrl(item),
                         title = item.name,
+                        frontFull = api.posterUrl(item, 2400),
+                        backFull = api.backCoverUrl(item, 2400),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Row(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -591,10 +607,20 @@ private fun FlipPoster(
     front: String?,
     back: String?,
     title: String?,
+    frontFull: String? = null,
+    backFull: String? = null,
     modifier: Modifier,
     badges: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit,
 ) {
     var flipped by remember(back) { mutableStateOf(false) }
+    var zoom by remember { mutableStateOf(false) }
+    val canZoom = !LocalUi.current.isTv && front != null
+    if (zoom) {
+        CoverZoomDialog(
+            front = frontFull ?: front, back = backFull ?: back,
+            startBack = flipped, onClose = { zoom = false },
+        )
+    }
     val rotation by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (flipped) 180f else 0f,
         animationSpec = androidx.compose.animation.core.tween(550),
@@ -624,6 +650,18 @@ private fun FlipPoster(
             // Задняя сторона повёрнута на 180° — разворачиваем картинку, чтобы она не была зеркальной
             modifier = Modifier.fillMaxSize().graphicsLayer { if (showBack) rotationY = 180f },
         )
+        // Лупа — открыть обложку на весь экран с приближением (телефон, планшет, ПК)
+        if (canZoom && rotation == 0f || canZoom && rotation == 180f) {
+            Icon(
+                Icons.Rounded.ZoomIn, "Приблизить обложку", tint = Color.White,
+                modifier = Modifier.align(if (showBack) Alignment.TopEnd else Alignment.TopStart)
+                    .graphicsLayer { if (showBack) rotationY = 180f }
+                    .padding(8.dp).size(34.dp)
+                    .clip(CircleShape).background(Color(0x99000000))
+                    .clickable { zoom = true }
+                    .padding(5.dp),
+            )
+        }
         if (!showBack) {
             badges()
             if (back != null) {
@@ -635,4 +673,104 @@ private fun FlipPoster(
             }
         }
     }
+}
+
+/**
+ * Обложка на весь экран: приближение пальцами (щипок) и двойным нажатием,
+ * колесом мыши на ПК, перетаскивание пальцем или мышью. Кнопка «Перевернуть» — другая сторона.
+ */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+@Composable
+private fun CoverZoomDialog(front: String?, back: String?, startBack: Boolean, onClose: () -> Unit) {
+    var showBack by remember { mutableStateOf(startBack && back != null) }
+    var scale by remember { mutableStateOf(1f) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
+    var box by remember { mutableStateOf(IntSize.Zero) }
+
+    fun clamp(o: Offset, s: Float): Offset {
+        val maxX = box.width * (s - 1f) / 2f
+        val maxY = box.height * (s - 1f) / 2f
+        return Offset(o.x.coerceIn(-maxX, maxX), o.y.coerceIn(-maxY, maxY))
+    }
+    fun zoomTo(s: Float) {
+        scale = s.coerceIn(1f, 6f)
+        offset = clamp(offset, scale)
+    }
+
+    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Box(
+            Modifier.fillMaxSize().background(Color(0xF2000000))
+                .onSizeChanged { box = it }
+                // Колесо мыши (ПК)
+                .pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val ev = awaitPointerEvent()
+                            if (ev.type == PointerEventType.Scroll) {
+                                val dy = ev.changes.firstOrNull()?.scrollDelta?.y ?: 0f
+                                if (dy != 0f) zoomTo(if (dy < 0) scale * 1.2f else scale / 1.2f)
+                                ev.changes.forEach { it.consume() }
+                            }
+                        }
+                    }
+                }
+                // Двойное нажатие / двойной щелчок — приблизить или вернуть
+                .pointerInput(Unit) {
+                    detectTapGestures(onDoubleTap = { p ->
+                        if (scale > 1.05f) { scale = 1f; offset = Offset.Zero }
+                        else {
+                            val s = 2.5f
+                            val c = Offset(box.width / 2f, box.height / 2f)
+                            scale = s
+                            offset = clamp((c - p) * (s - 1f), s)
+                        }
+                    })
+                }
+                // Щипок двумя пальцами и перетаскивание
+                .pointerInput(Unit) {
+                    detectTransformGestures { _, pan, z, _ ->
+                        val s = (scale * z).coerceIn(1f, 6f)
+                        scale = s
+                        offset = clamp(offset + pan, s)
+                    }
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            AsyncImage(
+                model = if (showBack) back else front,
+                contentDescription = if (showBack) "Задняя обложка" else "Передняя обложка",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize().padding(12.dp).graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    translationX = offset.x
+                    translationY = offset.y
+                },
+            )
+            Row(
+                Modifier.align(Alignment.TopEnd).padding(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                if (back != null) {
+                    ZoomButton(Icons.Rounded.Flip, if (showBack) "Передняя обложка" else "Задняя обложка") {
+                        showBack = !showBack
+                        scale = 1f
+                        offset = Offset.Zero
+                    }
+                }
+                ZoomButton(Icons.Rounded.ZoomOut, "Уменьшить") { zoomTo(scale / 1.5f) }
+                ZoomButton(Icons.Rounded.ZoomIn, "Увеличить") { zoomTo(scale * 1.5f) }
+                ZoomButton(Icons.Rounded.Close, "Закрыть", onClose)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ZoomButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
+    Icon(
+        icon, label, tint = Color.White,
+        modifier = Modifier.size(46.dp).clip(CircleShape).background(Color(0xB3000000))
+            .clickable(onClick = onClick).padding(10.dp),
+    )
 }
