@@ -1,5 +1,7 @@
 package com.adultaristocrat.cinema.ui
 
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.FolderShared
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
