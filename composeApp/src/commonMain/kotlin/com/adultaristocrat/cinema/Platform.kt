@@ -68,6 +68,8 @@ data class AppFonts(val body: FontFamily, val brand: FontFamily)
 /** Всё, что отличается между Android и ПК */
 interface Platform {
     val deviceName: String
+    /** Номер сборки (с GitHub: 1.0.<номер запуска>) — чтобы видеть, что стоит новая версия */
+    val appVersion: String get() = AppConfig.VERSION
     val deviceId: String
     /** Android TV (управление пультом) */
     val isTv: Boolean

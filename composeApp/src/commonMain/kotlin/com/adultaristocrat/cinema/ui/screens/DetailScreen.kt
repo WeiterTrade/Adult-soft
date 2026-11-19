@@ -240,6 +240,7 @@ private fun DetailContent(state: AppState, model: DetailModel, item: BaseItem) {
                     frontFull = api.posterUrl(item, 2400),
                     backFull = api.backCoverUrl(item, 2400),
                     disc = api.discUrl(item),
+                    discCaption = discCaption(item),
                     modifier = Modifier.fillMaxWidth(0.66f).align(Alignment.CenterHorizontally),
                 ) {
                     item.runtimeMinutes?.let {
@@ -260,6 +261,7 @@ private fun DetailContent(state: AppState, model: DetailModel, item: BaseItem) {
                         frontFull = api.posterUrl(item, 2400),
                         backFull = api.backCoverUrl(item, 2400),
                         disc = api.discUrl(item),
+                    discCaption = discCaption(item),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Row(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -697,4 +699,10 @@ private fun ZoomButton(icon: androidx.compose.ui.graphics.vector.ImageVector, la
         modifier = Modifier.size(46.dp).clip(CircleShape).background(Color(0xB3000000))
             .clickable(onClick = onClick).padding(10.dp),
     )
+}
+
+/** Мелкая надпись на диске, как на заводском: «© 2024 Evil Angel» */
+internal fun discCaption(item: BaseItem): String? {
+    val parts = listOfNotNull(item.productionYear?.toString(), item.studios.firstOrNull()?.name?.takeIf { it.isNotBlank() })
+    return if (parts.isEmpty()) null else "© " + parts.joinToString(" ")
 }

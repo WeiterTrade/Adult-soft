@@ -63,7 +63,7 @@ fun SettingsScreen(state: AppState) {
             Spacer(Modifier.width(14.dp))
             Column {
                 Text(AppConfig.APP_NAME.uppercase(), style = brandStyle(20))
-                Text("Версия ${AppConfig.VERSION}", color = AA.TextDim)
+                Text("Версия ${state.platform.appVersion}", color = AA.TextDim)
             }
         }
         if (!state.offlineMode) {

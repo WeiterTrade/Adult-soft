@@ -39,6 +39,10 @@ class DesktopPlatform(private val windowState: WindowState) : Platform {
 
     override val deviceId: String = store.get("deviceId") ?: UUID.randomUUID().toString().also { store.put("deviceId", it) }
 
+    // Установщики jpackage передают версию сборки в это свойство
+    override val appVersion: String
+        get() = System.getProperty("jpackage.app-version")?.takeIf { it.isNotBlank() } ?: AppConfig.VERSION
+
     override val deviceName: String = run {
         val os = System.getProperty("os.name") ?: "PC"
         val host = runCatching { InetAddress.getLocalHost().hostName }.getOrNull()

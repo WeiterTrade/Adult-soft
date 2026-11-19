@@ -57,6 +57,10 @@ class AndroidPlatform(private val activity: Activity) : Platform {
 
     override val isDesktop: Boolean = false
 
+    override val appVersion: String
+        get() = runCatching { activity.packageManager.getPackageInfo(activity.packageName, 0).versionName }.getOrNull()
+            ?: AppConfig.VERSION
+
     override val deviceName: String =
         (if (isTv) "Android TV " else "Android ") + (Build.MODEL ?: "")
 

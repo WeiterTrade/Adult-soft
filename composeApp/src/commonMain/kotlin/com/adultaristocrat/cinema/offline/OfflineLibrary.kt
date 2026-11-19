@@ -242,6 +242,7 @@ class OfflineLibrary(private val platform: Platform, private val scope: Coroutin
             localPoster = url(m.poster),
             localBack = url(m.back),
             localDisc = url(m.disc),
+            studios = m.studios.map { com.adultaristocrat.cinema.api.NameRef(it) },
             localChapterThumbs = chapterThumbs,
             localFanart = url(m.fanart),
             localVideo = url(m.video),

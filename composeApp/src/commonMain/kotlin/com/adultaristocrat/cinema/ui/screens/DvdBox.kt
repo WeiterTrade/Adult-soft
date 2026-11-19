@@ -1,5 +1,8 @@
 package com.adultaristocrat.cinema.ui.screens
 
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.draw.blur
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -68,6 +71,7 @@ internal fun FlipPoster(
     frontFull: String? = null,
     backFull: String? = null,
     disc: String? = null,
+    discCaption: String? = null,
     modifier: Modifier,
     badges: @Composable BoxScope.() -> Unit,
 ) {
@@ -149,7 +153,7 @@ internal fun FlipPoster(
     ) {
         // Внутри коробки — держатель и диск (видно, пока крышка открыта)
         if (lid.value != 0f) {
-            DvdTray(disc ?: front, generated = disc == null, angle = spin.value, modifier = Modifier.fillMaxSize().then(unmirror).clip(shape))
+            DvdTray(disc ?: front, generated = disc == null, caption = discCaption, angle = spin.value, modifier = Modifier.fillMaxSize().then(unmirror).clip(shape))
         }
         // Крышка — сама обложка. Открывается вокруг левого края (на обороте — вокруг правого)
         Box(Modifier.fillMaxSize().then(unmirror)) {
@@ -201,7 +205,7 @@ internal fun FlipPoster(
 
 /** Белый DVD-бокс изнутри: рамка, держатель и крутящийся диск с бликом */
 @Composable
-private fun DvdTray(image: String?, generated: Boolean, angle: Float, modifier: Modifier) {
+private fun DvdTray(image: String?, generated: Boolean, caption: String?, angle: Float, modifier: Modifier) {
     Box(
         modifier.background(Brush.linearGradient(listOf(Color(0xFFF7F7F7), Color(0xFFD6D6D6)))),
         contentAlignment = Alignment.Center,
@@ -213,10 +217,11 @@ private fun DvdTray(image: String?, generated: Boolean, angle: Float, modifier: 
             Modifier.fillMaxWidth(0.88f).aspectRatio(1f)
                 .graphicsLayer { rotationZ = angle },
         ) {
-            AsyncImage(
+            if (generated) PrintedDisc(image, caption)
+            else AsyncImage(
                 model = image, contentDescription = "Диск",
-                contentScale = if (generated) ContentScale.Crop else ContentScale.Fit,
-                modifier = Modifier.fillMaxSize().clip(CircleShape).background(if (generated) Color(0xFFBDBDBD) else Color.Transparent),
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize().clip(CircleShape),
             )
             Canvas(Modifier.fillMaxSize()) {
                 val r = size.minDimension / 2f
@@ -249,6 +254,48 @@ private fun DvdTray(image: String?, generated: Boolean, angle: Float, modifier: 
                 ),
                 radius = r,
                 center = c,
+            )
+        }
+    }
+}
+
+/**
+ * Диск, нарисованный из обложки, «как заводской»: обложка целиком (видны название, имя актрисы,
+ * студия и режиссёр — что напечатано на ней), вокруг — размытый фон из той же обложки,
+ * внизу мелкая надпись «© год студия».
+ */
+@Composable
+private fun PrintedDisc(image: String?, caption: String?) {
+    androidx.compose.foundation.layout.BoxWithConstraints(
+        Modifier.fillMaxSize().clip(CircleShape).background(Color(0xFF3A3A3A)),
+    ) {
+        val d = maxWidth
+        // Фон: та же обложка, растянутая на весь диск и размытая
+        AsyncImage(
+            model = image, contentDescription = null, contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize().blur(d * 0.06f),
+        )
+        Box(Modifier.fillMaxSize().background(Color(0x33000000)))
+        // Обложка целиком — в самом большом прямоугольнике, который помещается в круг
+        AsyncImage(
+            model = image, contentDescription = "Диск", contentScale = ContentScale.Fit,
+            modifier = Modifier.align(Alignment.Center).fillMaxHeight(0.815f).aspectRatio(AA.POSTER_RATIO),
+        )
+        // Мягкое затемнение к краю — как типографская печать на диске
+        Box(
+            Modifier.fillMaxSize().background(
+                Brush.radialGradient(
+                    0.0f to Color.Transparent, 0.82f to Color.Transparent, 1.0f to Color(0x66000000),
+                ),
+            ),
+        )
+        if (caption != null) {
+            androidx.compose.material3.Text(
+                caption,
+                color = Color(0xE6FFFFFF),
+                fontSize = (d.value * 0.032f).sp,
+                maxLines = 1,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = d * 0.045f),
             )
         }
     }

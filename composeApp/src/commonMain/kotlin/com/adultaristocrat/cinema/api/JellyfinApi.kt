@@ -476,7 +476,7 @@ class JellyfinApi(
     companion object {
         const val CARD_FIELDS = "PrimaryImageAspectRatio,Genres,ProductionLocations,Overview"
         const val DETAIL_FIELDS =
-            "PrimaryImageAspectRatio,Genres,ProductionLocations,Overview,People,Taglines,RemoteTrailers,ProviderIds,OriginalTitle,MediaSources,MediaStreams,ChildCount,Chapters"
+            "PrimaryImageAspectRatio,Genres,ProductionLocations,Overview,People,Taglines,RemoteTrailers,ProviderIds,OriginalTitle,MediaSources,MediaStreams,ChildCount,Chapters,Studios"
 
         const val TICKS_PER_MS = 10_000L
 
