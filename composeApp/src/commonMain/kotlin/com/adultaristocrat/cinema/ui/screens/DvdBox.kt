@@ -1,5 +1,10 @@
 package com.adultaristocrat.cinema.ui.screens
 
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.ui.draw.blur
@@ -136,14 +141,19 @@ internal fun FlipPoster(
             .onKeyEvent { e ->
                 val ok = e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter
                 if (ok && e.type == KeyEventType.KeyUp) {
-                    playBox()
+                    if (flip.value > 90f) flipOver() else playBox()
                     true
                 } else ok
             }
             .pointerInput(back, front) {
                 detectTapGestures { o ->
                     val x = o.x / size.width.coerceAtLeast(1)
-                    if (x in 0.3f..0.7f || back == null) playBox() else flipOver()
+                    // С задней стороны коробку не открываем — любое нажатие просто возвращает переднюю
+                    when {
+                        flip.value > 90f -> flipOver()
+                        x in 0.3f..0.7f || back == null -> playBox()
+                        else -> flipOver()
+                    }
                 }
             }
             .graphicsLayer {
@@ -260,43 +270,52 @@ private fun DvdTray(image: String?, generated: Boolean, caption: String?, angle:
 }
 
 /**
- * Диск, нарисованный из обложки, «как заводской»: обложка целиком (видны название, имя актрисы,
- * студия и режиссёр — что напечатано на ней), вокруг — размытый фон из той же обложки,
- * внизу мелкая надпись «© год студия».
+ * Диск, нарисованный из обложки (вариант «2B»): обложка целиком — 93% высоты диска,
+ * вокруг неё зеркальные отражения той же обложки (по бокам, сверху и снизу),
+ * переход растушёван. Диск полностью залит картинкой, без затемнений.
  */
 @Composable
-private fun PrintedDisc(image: String?, caption: String?) {
+private fun PrintedDisc(image: String?, @Suppress("UNUSED_PARAMETER") caption: String?) {
     androidx.compose.foundation.layout.BoxWithConstraints(
-        Modifier.fillMaxSize().clip(CircleShape).background(Color(0xFF3A3A3A)),
+        Modifier.fillMaxSize().clip(CircleShape).background(Color(0xFFECECEC)),
     ) {
         val d = maxWidth
-        // Фон: та же обложка, растянутая на весь диск и размытая
-        AsyncImage(
-            model = image, contentDescription = null, contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize().blur(d * 0.06f),
-        )
-        Box(Modifier.fillMaxSize().background(Color(0x33000000)))
-        // Обложка целиком — в самом большом прямоугольнике, который помещается в круг
-        AsyncImage(
-            model = image, contentDescription = "Диск", contentScale = ContentScale.Fit,
-            modifier = Modifier.align(Alignment.Center).fillMaxHeight(0.815f).aspectRatio(AA.POSTER_RATIO),
-        )
-        // Мягкое затемнение к краю — как типографская печать на диске
-        Box(
-            Modifier.fillMaxSize().background(
-                Brush.radialGradient(
-                    0.0f to Color.Transparent, 0.82f to Color.Transparent, 1.0f to Color(0x66000000),
-                ),
-            ),
-        )
-        if (caption != null) {
-            androidx.compose.material3.Text(
-                caption,
-                color = Color(0xE6FFFFFF),
-                fontSize = (d.value * 0.032f).sp,
-                maxLines = 1,
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = d * 0.045f),
+        val h = d * 0.93f
+        val w = h * AA.POSTER_RATIO
+        val x0 = (d - w) / 2
+        val y0 = (d - h) / 2
+        // Отражения: по горизонтали нечётные — зеркально слева-направо, по вертикали — сверху-вниз
+        for (j in -1..1) for (i in -1..1) {
+            if (i == 0 && j == 0) continue
+            AsyncImage(
+                model = image, contentDescription = null, contentScale = ContentScale.FillBounds,
+                modifier = Modifier
+                    .offset(x = x0 + w * i, y = y0 + h * j)
+                    .size(w, h)
+                    .graphicsLayer {
+                        scaleX = if (i != 0) -1f else 1f
+                        scaleY = if (j != 0) -1f else 1f
+                    },
             )
         }
+        // Сама обложка — с мягкими краями, чтобы шов с отражением был незаметен
+        AsyncImage(
+            model = image, contentDescription = "Диск", contentScale = ContentScale.FillBounds,
+            modifier = Modifier
+                .offset(x = x0, y = y0)
+                .size(w, h)
+                .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+                .drawWithContent {
+                    drawContent()
+                    drawRect(
+                        brush = Brush.horizontalGradient(0f to Color.Transparent, 0.08f to Color.Black, 0.92f to Color.Black, 1f to Color.Transparent),
+                        blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+                    )
+                    drawRect(
+                        brush = Brush.verticalGradient(0f to Color.Transparent, 0.04f to Color.Black, 0.96f to Color.Black, 1f to Color.Transparent),
+                        blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+                    )
+                },
+        )
     }
 }
