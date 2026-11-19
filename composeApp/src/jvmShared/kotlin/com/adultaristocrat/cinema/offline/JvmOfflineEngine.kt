@@ -241,6 +241,7 @@ class JvmOfflineEngine : OfflineEngine {
         val img = listOf("jpg", "jpeg", "png", "webp")
         fun pics(vararg names: String) = names.flatMap { n -> img.map { "$n.$it" } }.toTypedArray()
         val poster = find(*pics("$base-poster", "poster", "folder", "cover", "$base-cover", "$base-thumb", "$base"))
+        val disc = find(*pics("$base-disc", "$base-discart", "disc", "discart", "cdart"))
         val back = find(*pics("$base-back", "$base-backcover", "$base-rear", "$base-boxrear", "back", "backcover", "boxrear", "cover-back"))
         val fanart = find(*pics("$base-fanart", "fanart", "backdrop", "$base-backdrop", "$base-landscape", "landscape"))
         val actorsDir = files.firstOrNull { it.name.equals(".actors/", ignoreCase = true) }
@@ -282,6 +283,7 @@ class JvmOfflineEngine : OfflineEngine {
             video = video.path,
             poster = poster?.path,
             back = back?.path,
+            disc = disc?.path,
             fanart = fanart?.path,
             actors = nfo?.actors()?.takeIf { it.isNotEmpty() }?.map { (n, role, thumb) -> OfflineActor(n, role, actorThumb(n, thumb)) }
                 ?: actorPics.keys.map { OfflineActor(it.replace('_', ' ').replaceFirstChar { c -> c.uppercase() }, null, actorPics[it]) },

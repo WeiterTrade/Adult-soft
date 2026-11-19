@@ -123,6 +123,7 @@ data class BaseItem(
     /** Офлайн-библиотека: адреса постера, фанарта и видео через локальный сервер */
     @kotlinx.serialization.Transient val localPoster: String? = null,
     @kotlinx.serialization.Transient val localBack: String? = null,
+    @kotlinx.serialization.Transient val localDisc: String? = null,
     /** Офлайн: картинки сцен (кадры из видео) */
     @kotlinx.serialization.Transient val localChapterThumbs: List<String?> = emptyList(),
     /** Офлайн: дополнительные сведения об актёре (из .bio) — пары «подпись, значение» */

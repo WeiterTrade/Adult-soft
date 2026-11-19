@@ -48,6 +48,8 @@ data class OfflineMovie(
     val poster: String? = null,
     /** Задняя обложка: «Название (год)-back.jpg» */
     val back: String? = null,
+    /** Картинка диска: «Название (год)-disc.png» */
+    val disc: String? = null,
     val fanart: String? = null,
     val actors: List<OfflineActor> = emptyList(),
     val directors: List<String> = emptyList(),

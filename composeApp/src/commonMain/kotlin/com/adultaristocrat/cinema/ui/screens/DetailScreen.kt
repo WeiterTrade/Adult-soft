@@ -239,6 +239,7 @@ private fun DetailContent(state: AppState, model: DetailModel, item: BaseItem) {
                     title = item.name,
                     frontFull = api.posterUrl(item, 2400),
                     backFull = api.backCoverUrl(item, 2400),
+                    disc = api.discUrl(item),
                     modifier = Modifier.fillMaxWidth(0.66f).align(Alignment.CenterHorizontally),
                 ) {
                     item.runtimeMinutes?.let {
@@ -258,6 +259,7 @@ private fun DetailContent(state: AppState, model: DetailModel, item: BaseItem) {
                         title = item.name,
                         frontFull = api.posterUrl(item, 2400),
                         backFull = api.backCoverUrl(item, 2400),
+                        disc = api.discUrl(item),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Row(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -598,90 +600,12 @@ private fun SceneCard(index: Int, ch: Chapter, width: Dp, onClick: () -> Unit) {
 }
 
 /**
- * Обложка, которая переворачивается, как на Adult Empire: нажатие (палец, мышь, OK на пульте)
- * показывает заднюю обложку, повторное — снова переднюю. Без задней обложки — обычный постер.
- * Плашки (длительность и т.п.) видны только на передней стороне.
- */
-@Composable
-private fun FlipPoster(
-    front: String?,
-    back: String?,
-    title: String?,
-    frontFull: String? = null,
-    backFull: String? = null,
-    modifier: Modifier,
-    badges: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit,
-) {
-    var flipped by remember(back) { mutableStateOf(false) }
-    var zoom by remember { mutableStateOf(false) }
-    val canZoom = !LocalUi.current.isTv && front != null
-    if (zoom) {
-        CoverZoomDialog(
-            front = frontFull ?: front, back = backFull ?: back,
-            startBack = flipped, onClose = { zoom = false },
-        )
-    }
-    val rotation by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (flipped) 180f else 0f,
-        animationSpec = androidx.compose.animation.core.tween(550),
-    )
-    val fv = com.adultaristocrat.cinema.ui.rememberFocusVisual()
-    val shape = RoundedCornerShape(16.dp)
-    val showBack = rotation > 90f
-    Box(
-        modifier
-            .aspectRatio(AA.POSTER_RATIO)
-            .graphicsLayer {
-                rotationY = rotation
-                cameraDistance = 14f * density
-            }
-            .clip(shape)
-            .background(AA.SurfaceHigh)
-            .border(if (fv.active && back != null) 3.dp else 1.5.dp, if (fv.active && back != null) AA.Red else AA.BorderDark, shape)
-            .then(
-                if (back != null) Modifier.clickable(interactionSource = fv.interaction, indication = null) { flipped = !flipped }
-                else Modifier
-            ),
-    ) {
-        AsyncImage(
-            model = if (showBack) back else front,
-            contentDescription = if (showBack) "Задняя обложка" else title,
-            contentScale = ContentScale.Fit,
-            // Задняя сторона повёрнута на 180° — разворачиваем картинку, чтобы она не была зеркальной
-            modifier = Modifier.fillMaxSize().graphicsLayer { if (showBack) rotationY = 180f },
-        )
-        // Лупа — открыть обложку на весь экран с приближением (телефон, планшет, ПК)
-        if (canZoom && rotation == 0f || canZoom && rotation == 180f) {
-            Icon(
-                Icons.Rounded.ZoomIn, "Приблизить обложку", tint = Color.White,
-                modifier = Modifier.align(if (showBack) Alignment.TopEnd else Alignment.TopStart)
-                    .graphicsLayer { if (showBack) rotationY = 180f }
-                    .padding(8.dp).size(34.dp)
-                    .clip(CircleShape).background(Color(0x99000000))
-                    .clickable { zoom = true }
-                    .padding(5.dp),
-            )
-        }
-        if (!showBack) {
-            badges()
-            if (back != null) {
-                Icon(
-                    Icons.Rounded.Flip, "Перевернуть обложку", tint = Color.White,
-                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp).size(30.dp)
-                        .clip(androidx.compose.foundation.shape.CircleShape).background(Color(0x99000000)).padding(5.dp),
-                )
-            }
-        }
-    }
-}
-
-/**
  * Обложка на весь экран: приближение пальцами (щипок) и двойным нажатием,
  * колесом мыши на ПК, перетаскивание пальцем или мышью. Кнопка «Перевернуть» — другая сторона.
  */
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
-private fun CoverZoomDialog(front: String?, back: String?, startBack: Boolean, onClose: () -> Unit) {
+internal fun CoverZoomDialog(front: String?, back: String?, startBack: Boolean, onClose: () -> Unit) {
     var showBack by remember { mutableStateOf(startBack && back != null) }
     var scale by remember { mutableStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }

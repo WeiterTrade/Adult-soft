@@ -189,7 +189,7 @@ class JellyfinApi(
             "Ids" to ids,
             "PersonIds" to personIds,
             "Fields" to fields,
-            "EnableImageTypes" to "Primary,Backdrop,Thumb,BoxRear",
+            "EnableImageTypes" to "Primary,Backdrop,Thumb,BoxRear,Disc",
             "ImageTypeLimit" to 1,
             "EnableTotalRecordCount" to true,
         )
@@ -417,6 +417,14 @@ class JellyfinApi(
         item.isOffline -> item.localBack
         item.imageTags["BoxRear"] != null ->
             "$baseUrl/Items/${item.id}/Images/BoxRear?tag=${item.imageTags["BoxRear"]}&maxHeight=$maxHeight&quality=90"
+        else -> null
+    }
+
+    /** Картинка диска: в Jellyfin — тип «Диск» (Disc), офлайн — файл -disc.png */
+    fun discUrl(item: BaseItem, maxHeight: Int = 900): String? = when {
+        item.isOffline -> item.localDisc
+        item.imageTags["Disc"] != null ->
+            "$baseUrl/Items/${item.id}/Images/Disc?tag=${item.imageTags["Disc"]}&maxHeight=$maxHeight&quality=90"
         else -> null
     }
 

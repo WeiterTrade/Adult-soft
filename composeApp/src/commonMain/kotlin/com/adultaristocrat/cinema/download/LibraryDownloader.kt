@@ -137,6 +137,7 @@ class LibraryDownloader(private val state: AppState) {
         if (item.imageTags["Primary"] != null) image(store, api.originalImageUrl(item.id, "Primary"), store.join(dir, "$base-poster.jpg"))
         if (item.backdropImageTags.isNotEmpty()) image(store, api.originalImageUrl(item.id, "Backdrop/0"), store.join(dir, "$base-fanart.jpg"))
         if (item.imageTags["BoxRear"] != null) image(store, api.originalImageUrl(item.id, "BoxRear"), store.join(dir, "$base-back.jpg"))
+        if (item.imageTags["Disc"] != null) image(store, api.originalImageUrl(item.id, "Disc"), store.join(dir, "$base-disc.png"))
 
         // Фото актёров
         step = "Фото актёров"
